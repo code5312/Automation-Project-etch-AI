@@ -1,0 +1,342 @@
+[
+ {
+  "run_id": "r0000",
+  "depth_um": 7.234,
+  "params": {
+   "ion_flux": 14.785246859526541,
+   "etchant_flux": 6069.063052442917,
+   "oxygen_flux": 1978.6758308440333,
+   "ion_mean_energy": 119.63638886809349,
+   "ion_exponent": 487.9366313668682,
+   "mask_width": 12.392041385173798,
+   "mask_height": 13.87291718274355
+  },
+  "wall_sec": 88.1,
+  "meta_wall_sec": 86.8,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0001",
+  "depth_um": 6.409,
+  "params": {
+   "ion_flux": 6.4492275553006735,
+   "etchant_flux": 3220.608670669732,
+   "oxygen_flux": 307.6021793725367,
+   "ion_mean_energy": 168.62250808626413,
+   "ion_exponent": 252.40612458592025,
+   "mask_width": 6.952073305845261,
+   "mask_height": 8.65545178949833
+  },
+  "wall_sec": 77.2,
+  "meta_wall_sec": 75.9,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0002",
+  "depth_um": 3.212,
+  "params": {
+   "ion_flux": 5.246460577992021,
+   "etchant_flux": 11620.77395559184,
+   "oxygen_flux": 891.7749376819746,
+   "ion_mean_energy": 59.0503909625113,
+   "ion_exponent": 161.92683867297455,
+   "mask_width": 9.824409030377865,
+   "mask_height": 11.926458723843098
+  },
+  "wall_sec": 48.2,
+  "meta_wall_sec": 47.0,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0003",
+  "depth_um": 8.498,
+  "params": {
+   "ion_flux": 21.39184753914326,
+   "etchant_flux": 1949.989561246638,
+   "oxygen_flux": 573.9605118918363,
+   "ion_mean_energy": 155.37778427824378,
+   "ion_exponent": 772.9387853270755,
+   "mask_width": 11.26922183483839,
+   "mask_height": 6.584233656525612
+  },
+  "wall_sec": 110.9,
+  "meta_wall_sec": 109.5,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0004",
+  "depth_um": 22.923,
+  "params": {
+   "ion_flux": 25.90269959878192,
+   "etchant_flux": 9081.971904011029,
+   "oxygen_flux": 416.88178219004146,
+   "ion_mean_energy": 132.22102271392941,
+   "ion_exponent": 672.3899119017115,
+   "mask_width": 13.302675507962704,
+   "mask_height": 10.660476841032505
+  },
+  "wall_sec": 252.2,
+  "meta_wall_sec": 250.7,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0005",
+  "depth_um": 0.497,
+  "params": {
+   "ion_flux": 3.3398523471485833,
+   "etchant_flux": 1621.1861597206434,
+   "oxygen_flux": 1510.074955695736,
+   "ion_mean_energy": 78.69381634518504,
+   "ion_exponent": 104.68230287072649,
+   "mask_width": 7.8539412543177605,
+   "mask_height": 7.818988010287285
+  },
+  "wall_sec": 10.7,
+  "meta_wall_sec": 9.5,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0006",
+  "depth_um": 8.77,
+  "params": {
+   "ion_flux": 7.169721115364096,
+   "etchant_flux": 5474.211067708337,
+   "oxygen_flux": 450.5222369942746,
+   "ion_mean_energy": 194.12316270172596,
+   "ion_exponent": 217.6207210709219,
+   "mask_width": 8.977242410182953,
+   "mask_height": 12.606672562658787
+  },
+  "wall_sec": 96.2,
+  "meta_wall_sec": 95.2,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0007",
+  "depth_um": 3.371,
+  "params": {
+   "ion_flux": 9.889652374465498,
+   "etchant_flux": 3090.2480668684298,
+   "oxygen_flux": 1245.8361892673583,
+   "ion_mean_energy": 92.96157043427229,
+   "ion_exponent": 318.31318049957326,
+   "mask_width": 10.428883522748947,
+   "mask_height": 9.890424057841301
+  },
+  "wall_sec": 42.0,
+  "meta_wall_sec": 41.0,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0008",
+  "depth_um": 8.09,
+  "params": {
+   "ion_flux": 11.200858955749784,
+   "etchant_flux": 13345.63835138793,
+   "oxygen_flux": 518.2392069297235,
+   "ion_mean_energy": 68.95497678779066,
+   "ion_exponent": 278.6712871669243,
+   "mask_width": 11.525002151727676,
+   "mask_height": 10.210559211671352
+  },
+  "wall_sec": 91.7,
+  "meta_wall_sec": 90.5,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0009",
+  "depth_um": 3.503,
+  "params": {
+   "ion_flux": 8.68698939390325,
+   "etchant_flux": 2255.3855794294673,
+   "oxygen_flux": 1054.2865730651272,
+   "ion_mean_energy": 141.96446198038757,
+   "ion_exponent": 450.00108659312605,
+   "mask_width": 9.068379044532776,
+   "mask_height": 7.302170097827911
+  },
+  "wall_sec": 46.4,
+  "meta_wall_sec": 45.4,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0010",
+  "depth_um": 4.228,
+  "params": {
+   "ion_flux": 3.8949921733352237,
+   "etchant_flux": 6997.350409319136,
+   "oxygen_flux": 366.0948964354834,
+   "ion_mean_energy": 102.70513095892966,
+   "ion_exponent": 900.623026804157,
+   "mask_width": 6.192232243716717,
+   "mask_height": 12.03022500127554
+  },
+  "wall_sec": 47.2,
+  "meta_wall_sec": 46.2,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0011",
+  "depth_um": 11.577,
+  "params": {
+   "ion_flux": 28.23758591696538,
+   "etchant_flux": 3739.6774177465745,
+   "oxygen_flux": 1798.5332846772474,
+   "ion_mean_energy": 184.38415830023587,
+   "ion_exponent": 136.48295040453536,
+   "mask_width": 12.651640020310879,
+   "mask_height": 9.496107280254364
+  },
+  "wall_sec": 133.1,
+  "meta_wall_sec": 131.8,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0012",
+  "depth_um": 13.665,
+  "params": {
+   "ion_flux": 18.887015921537994,
+   "etchant_flux": 4682.690603124459,
+   "oxygen_flux": 776.2029584747153,
+   "ion_mean_energy": 178.2195842359215,
+   "ion_exponent": 117.67349138969338,
+   "mask_width": 10.684669367969036,
+   "mask_height": 13.26375912874937
+  },
+  "wall_sec": 159.2,
+  "meta_wall_sec": 158.0,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0013",
+  "depth_um": 2.338,
+  "params": {
+   "ion_flux": 4.3299655559551,
+   "etchant_flux": 2722.8081925900324,
+   "oxygen_flux": 677.5030442042786,
+   "ion_mean_energy": 110.0438688416034,
+   "ion_exponent": 587.5358404242355,
+   "mask_width": 8.221217952668667,
+   "mask_height": 8.23134657740593
+  },
+  "wall_sec": 31.9,
+  "meta_wall_sec": 30.8,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0014",
+  "depth_um": 3.533,
+  "params": {
+   "ion_flux": 5.5302282285394755,
+   "etchant_flux": 7729.581509895067,
+   "oxygen_flux": 2255.4666168173108,
+   "ion_mean_energy": 145.7854290958494,
+   "ion_exponent": 391.46192901680115,
+   "mask_width": 7.094098478555679,
+   "mask_height": 11.444798581302166
+  },
+  "wall_sec": 40.4,
+  "meta_wall_sec": 39.5,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0015",
+  "depth_um": 4.274,
+  "params": {
+   "ion_flux": 13.563160413482922,
+   "etchant_flux": 1421.2107726902932,
+   "oxygen_flux": 257.96802934756755,
+   "ion_mean_energy": 68.64734585396945,
+   "ion_exponent": 180.15518817665,
+   "mask_width": 13.562272429466248,
+   "mask_height": 6.036657422780991
+  },
+  "wall_sec": 56.3,
+  "meta_wall_sec": 55.4,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0016",
+  "depth_um": 13.802,
+  "params": {
+   "ion_flux": 13.918213572830133,
+   "etchant_flux": 8220.311326855272,
+   "oxygen_flux": 1141.857723197044,
+   "ion_mean_energy": 195.7554650027305,
+   "ion_exponent": 860.6908081665092,
+   "mask_width": 8.432691559195518,
+   "mask_height": 8.922653265297413
+  },
+  "wall_sec": 110.2,
+  "meta_wall_sec": 108.3,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0017",
+  "depth_um": 2.155,
+  "params": {
+   "ion_flux": 6.098397585220053,
+   "etchant_flux": 1551.0405478063542,
+   "oxygen_flux": 551.2757822640001,
+   "ion_mean_energy": 90.09069637395442,
+   "ion_exponent": 167.88694823663494,
+   "mask_width": 10.973192170262337,
+   "mask_height": 13.580309942364693
+  },
+  "wall_sec": 15.9,
+  "meta_wall_sec": 15.2,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0018",
+  "depth_um": 1.941,
+  "params": {
+   "ion_flux": 4.21950871482554,
+   "etchant_flux": 4290.763677049258,
+   "oxygen_flux": 1645.7394492485564,
+   "ion_mean_energy": 125.83140949718654,
+   "ion_exponent": 261.7935089739352,
+   "mask_width": 13.849921502172947,
+   "mask_height": 6.868788190186024
+  },
+  "wall_sec": 16.3,
+  "meta_wall_sec": 15.6,
+  "K": 2,
+  "rays": 300
+ },
+ {
+  "run_id": "r0019",
+  "depth_um": 7.731,
+  "params": {
+   "ion_flux": 17.12736887990355,
+   "etchant_flux": 2560.2414651659574,
+   "oxygen_flux": 341.0724244905203,
+   "ion_mean_energy": 86.1846727784723,
+   "ion_exponent": 543.5335372222785,
+   "mask_width": 7.306452997028828,
+   "mask_height": 11.651685193181038
+  },
+  "wall_sec": 51.9,
+  "meta_wall_sec": 50.9,
+  "K": 2,
+  "rays": 300
+ }
+]
