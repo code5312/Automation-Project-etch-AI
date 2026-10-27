@@ -1,0 +1,53 @@
+name: pr-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - run: pip install -e .
+      - run: pytest tests/unit -v
+
+  viennaps-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # ViennaLS가 쓰는 VTK 바이너리에 필요(2026-10-27 컨테이너 테스트에서 확인,
+      # reports/evidence/W1-03_sim_install.md). 없으면 libX11.so.6 ImportError.
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6
+      - run: pip install -r requirements-sim.txt
+      - run: python -c "import viennaps; print('viennaps', viennaps.__version__)"
+
+  forbidden-expressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python scripts/check_forbidden_expressions.py

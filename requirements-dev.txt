@@ -1,0 +1,4 @@
+# 린트·테스트·시크릿 스캔 도구 (CI pr-check, pre-commit에서 사용). CLAUDE.md: 의존성 버전 고정.
+ruff==0.17.3
+pytest==9.1.1
+detect-secrets==1.5.0
