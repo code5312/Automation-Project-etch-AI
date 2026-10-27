@@ -1,4 +1,8 @@
 # 시뮬레이션 스윕: Indexed Job 하나가 샤드 N개를 병렬로 처리  [제안, 클러스터에서 아직 실행 안 해봄]
+# [확인, W1-S4] 로컬 kind 테스트(sim-job-local.yaml)에서 cpu:"2"는 너무 적어 심하게 쓰로틀링됨을
+# 확인함(ViennaPS 레이트레이싱이 내부 12~13스레드 사용, W1-S1). 아래 cpu:"2"도 같은 문제가
+# 있을 가능성이 높다 — 실제 클러스터 노드의 코어 수를 모르므로[미확인] 여기 숫자는 임의로
+# 바꾸지 않았다. 실클러스터 확보 시 노드당 코어 수 대비 parallelism·cpu를 재조정해야 한다.
 apiVersion: batch/v1
 kind: Job
 metadata:

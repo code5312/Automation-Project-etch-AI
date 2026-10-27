@@ -1,4 +1,7 @@
-# 시뮬레이션 스윕: Indexed Job 하나가 샤드 N개를 병렬로 처리  [제안, 클러스터에서 아직 실행 안 해봄]
+# 시뮬레이션 스윕: Indexed Job 하나가 샤드 N개를 병렬로 처리
+# [확인, W1-S4] cpu:"1"로는 ViennaPS 레이트레이싱(내부 12~13스레드 사용, W1-S1에서 확인)이
+# 심하게 쓰로틀링되어 30분에도 레시피 1건을 못 끝냈다. parallelism=2 기준 파드당 cpu:"6"으로 올림
+# (2 파드 × 6 = 12코어, 호스트 14코어 내).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -20,8 +23,8 @@ spec:
             - { name: SIM_K,      value: "2" }
             - { name: SIM_RAW,    value: "/data/raw" }
           resources:
-            requests: { cpu: "1", memory: "2Gi" }
-            limits:   { cpu: "1", memory: "2Gi" }
+            requests: { cpu: "6", memory: "3Gi" }
+            limits:   { cpu: "6", memory: "3Gi" }
           volumeMounts:
             - { name: data, mountPath: /data }
       volumes:
