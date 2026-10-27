@@ -1,0 +1,49 @@
+# 데이터·산출물 (CLAUDE.md: 큰 데이터는 Git에 올리지 않음)
+data/
+runs/
+registry/
+reports/*
+!reports/evidence
+!reports/evidence/**
+
+# 대용량 메시 (golden/·tests/fixtures/는 예외)
+*.vtp
+!golden/**/*.vtp
+!tests/fixtures/**/*.vtp
+
+# 체크포인트/모델 아티팩트
+*.pt
+*.pth
+*.ckpt
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 시크릿/환경변수
+.env
+.env.*
+!.env.example
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 다운로드한 도구 바이너리
+kind.exe
+
+# 로컬 세션/전송용 파일 (저장소 내용 아님)
+.claude/
+seed.zip
+
