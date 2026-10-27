@@ -1,0 +1,9 @@
+# MaterialIds 매핑 — W1-S5에서 실측 확정 (reports/evidence/W1-S5_materials.md)
+# run_sim.py의 MakeTrench(SF6O2Etching) 기본 지오메트리로 레시피 1건(r0000, K=2)을 실행해
+# t000.vtp(식각 전)·t002.vtp(식각 후)의 MaterialIds 셀 데이터와 y좌표를 대조해 확정했다.
+materials:
+  0: mask   # y in [0, mask_height] 범위에 고정, 식각 동안 변하지 않음
+  10: Si    # t000에서 y≈0의 얇은 표면선 → 식각 진행에 따라 y<0으로 확장(식각 깊이 = -ymin)
+
+# 참고: 초안 etl.py 코드의 주석(`# 0=Si, 10=마스크`)은 틀렸다(반대로 적혀 있었음).
+# etl.py를 실제 구현으로 교체할 때(W3-03) 이 파일의 매핑을 따른다.
