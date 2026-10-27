@@ -1,7 +1,10 @@
 # 데이터·산출물 (CLAUDE.md: 큰 데이터는 Git에 올리지 않음)
-data/
-runs/
-registry/
+# 루트에만 적용(앞의 /) — /registry/ 없이 "registry/"라고만 쓰면
+# src/etchpipe/registry/(소스 코드)까지 같이 무시돼서 실제로 커밋이 빠지는 버그가 있었음
+# (2026-10-28, 실제 GitHub Actions 실패로 발견: registry.py가 한 번도 커밋 안 됨).
+/data/
+/runs/
+/registry/
 reports/*
 !reports/evidence
 !reports/evidence/**

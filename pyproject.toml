@@ -32,5 +32,10 @@ extend-exclude = [
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
+[tool.ruff.lint.isort]
+# etchpipe가 설치돼 있지 않아도(lint 잡은 pip install -e . 을 안 함) import 정렬이
+# 설치 여부에 따라 달라지지 않게 first-party로 고정한다(2026-10-28, CI lint 실패로 발견).
+known-first-party = ["etchpipe"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
