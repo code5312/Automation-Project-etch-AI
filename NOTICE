@@ -1,0 +1,37 @@
+etch-pipeline
+Copyright 2026 etch-pipeline contributors
+
+본 저장소의 코드(src/, scripts/, tests/, docker/Dockerfile.train, docker/Dockerfile.serve 등)는
+Apache License, Version 2.0 조건으로 배포된다. 전문은 LICENSE 참조.
+
+예외: 시뮬레이션 환경
+---------------------
+docker/Dockerfile.sim (아직 미작성, W1-S4에서 작성 예정)은 ViennaPS(GPL-3.0)와
+ViennaLS(GPL-3.0)를 설치한다. 이 이미지로 빌드·배포되는 결과물에는 GPL-3.0 조건이
+적용된다. ViennaPS/ViennaLS는 별도 프로세스(서브프로세스/바인딩 호출)로만 사용하며
+본 저장소의 Apache-2.0 코드에 정적 링크하거나 소스를 포함하지 않는다.
+
+이 구분(코드 Apache-2.0 / sim 이미지 GPL-3.0)은 변호사 검토를 거친 확정 사실이 아니라
+팀 판단이다. 자세한 배경은 docs/project-definition.md §11 참조.
+
+주요 의존성 라이선스
+--------------------
+| 패키지                  | 라이선스        | 환경       |
+|--------------------------|-----------------|------------|
+| ViennaPS                 | GPL-3.0         | sim        |
+| ViennaLS                 | GPL-3.0         | sim        |
+| pyvista                  | MIT             | sim        |
+| numpy                    | BSD-3-Clause    | sim/train/serve |
+| scipy                    | BSD-3-Clause    | sim        |
+| PyTorch                  | BSD-3-Clause    | train/serve |
+| PyTorch Geometric (PyG)   | MIT             | train      |
+| pytorch_scatter           | MIT             | train      |
+| nvidia-physicsnemo        | Apache-2.0      | train      |
+| FastAPI                   | MIT             | serve      |
+| uvicorn                   | BSD-3-Clause    | serve      |
+| pydantic                  | MIT             | serve      |
+| pytest                    | MIT             | dev        |
+| ruff                      | MIT             | dev        |
+
+표의 라이선스 표기는 각 패키지의 공개 메타데이터 기준이며, 정확한 버전별 라이선스는
+requirements-*.txt에 고정된 버전의 PyPI 메타데이터로 재확인해야 한다 [미확인: 버전별 재검증].
