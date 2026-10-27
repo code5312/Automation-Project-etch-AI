@@ -23,6 +23,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # etchpipe가 pyvista(ETL용)에 의존 — VTK 바이너리에 필요(W1-03 증거와 동일 이유).
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6
       - run: pip install -r requirements-dev.txt
       - run: pip install -e .
       - run: pytest tests/unit -v
@@ -42,6 +47,32 @@ jobs:
             libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6
       - run: pip install -r requirements-sim.txt
       - run: python -c "import viennaps; print('viennaps', viennaps.__version__)"
+
+  pipeline-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6
+      - run: pip install -r requirements-dev.txt
+      - run: pip install -e .
+      - run: python scripts/run_pipeline_smoke.py
+
+  gate-negative:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - run: pip install -e .
+      - run: python scripts/run_gate_negative.py
 
   forbidden-expressions:
     runs-on: ubuntu-latest
