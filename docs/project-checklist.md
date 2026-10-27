@@ -54,17 +54,17 @@
 
 목표: **더미 모델**로 전체 흐름을 끝까지 돌리고 인터페이스(파일 형식·해시·종료 코드)를 고정한다.
 
-- [ ] W2-01 `run_sim`·`sim_batch`를 `etchpipe/sim/`으로 이식, `meta.json` 스키마(설계서 §3 C1), 정지 조건 구현 → FR-01, FR-03
-- [ ] W2-02 `sampling`·`make_splits`(레시피 단위, 시드 고정) → FR-02 / 테스트: 같은 시드 동일 결과, 분할 교집합 0
-- [ ] W2-03 CI 픽스처: 레시피 3개, K=3 `tests/fixtures/raw/` 생성·커밋
-- [ ] W2-04 ETL 최소판: 그래프 변환, `dataset_hash`, `manifest.json` → FR-04, FR-05 (SDF는 3주차)
-- [ ] W2-05 더미 모델 2종: 변위 0 예측(champion 역할), 무작위 변위(망가진 모델 역할)
-- [ ] W2-06 **지표 단위 테스트 먼저 작성 후** 지표 구현(Chamfer, depth) → 설계서 §3 C4 / 테스트: 정답=예측이면 0, 평행이동·직선·사각 트렌치 값, 순서 불변
-- [ ] W2-07 `gate` 최소판(항목 1·4 + 종료 코드 0/1/2), 레지스트리 최소판(승격·`champion` 포인터·`history.jsonl`) → FR-10, FR-11
-- [ ] W2-08 서빙 최소판: `/health`, `/model`, `/predict`(더미) + API 키 필수 기동 → FR-12
-- [ ] W2-09 `pipeline-smoke` 워크플로: 픽스처 → ETL → 더미 학습(또는 로드) → 평가 → 게이트 → 레지스트리 → 서빙 호출 → FR-16
-- [ ] W2-10 `gate-negative` 워크플로(더미): 정상 통과, 무작위 변위 모델 차단, `dataset_hash` 불일치 코드 2 → **증거 ① 프로토타입**
-- [ ] W2-11 인터페이스 동결: 스키마·해시 규칙·종료 코드를 문서에 확정, 변경 시 ADR
+- [x] W2-01 `run_sim`·`sim_batch`를 `etchpipe/sim/`으로 이식, `meta.json` 스키마(설계서 §3 C1), 정지 조건 구현 → FR-01, FR-03 — 증거: `src/etchpipe/sim/run_sim.py`. depth_max=50µm 정지조건 실제 시뮬레이션으로 확인(고flux 레시피가 depth_max=5로 1스텝에서 조기종료).
+- [x] W2-02 `sampling`·`make_splits`(레시피 단위, 시드 고정) → FR-02 / 테스트: 같은 시드 동일 결과, 분할 교집합 0 — 증거: `tests/unit/test_sampling.py`(7건 통과). OOD는 학습범위 밖에서 별도 샘플링.
+- [x] W2-03 CI 픽스처: 레시피 3개, K=3 `tests/fixtures/raw/` 생성·커밋 — 증거: 실제 ViennaPS 실행(r0000/r0001/r0002, 시드7, 109.2/23.7/56.6초), `tests/fixtures/raw/` 116KB.
+- [x] W2-04 ETL 최소판: 그래프 변환, `dataset_hash`, `manifest.json` → FR-04, FR-05 (SDF는 3주차) — 증거: `tests/unit/test_etl.py`(9건). MaterialIds 주석 오류(W1-S5) 수정 반영.
+- [x] W2-05 더미 모델 2종: 변위 0 예측(champion 역할), 무작위 변위(망가진 모델 역할) — 증거: `tests/unit/test_dummy_models.py`(5건).
+- [x] W2-06 **지표 단위 테스트 먼저 작성 후** 지표 구현(Chamfer, depth) → 설계서 §3 C4 / 테스트: 정답=예측이면 0, 평행이동·직선·사각 트렌치 값, 순서 불변 — 증거: `tests/unit/test_metrics.py`(6건, 평행선 Chamfer=2d 해석값 검증 포함).
+- [x] W2-07 `gate` 최소판(항목 1·4 + 종료 코드 0/1/2), 레지스트리 최소판(승격·`champion` 포인터·`history.jsonl`) → FR-10, FR-11 — 증거: `tests/unit/test_gate.py`(8건)+`test_registry.py`(4건). 종료코드 2는 dataset_hash·golden_hash 둘 다 독립 체크.
+- [x] W2-08 서빙 최소판: `/health`, `/model`, `/predict`(더미) + API 키 필수 기동 → FR-12 — 증거: `tests/unit/test_serve.py`(6건). `ETCH_API_KEY` 없으면 import 시점에 기동 거부 확인.
+- [x] W2-09 `pipeline-smoke` 워크플로: 픽스처 → ETL → 더미 학습(또는 로드) → 평가 → 게이트 → 레지스트리 → 서빙 호출 → FR-16 — 증거: `scripts/run_pipeline_smoke.py` 로컬 실행 성공(exit 0), `.github/workflows/pr-check.yml`에 `pipeline-smoke` 잡 추가.
+- [x] W2-10 `gate-negative` 워크플로(더미): 정상 통과, 무작위 변위 모델 차단, `dataset_hash` 불일치 코드 2 → **증거 ① 프로토타입** — 증거: `scripts/run_gate_negative.py` 3개 케이스 모두 기대대로 동작(exit 0), CI 잡 추가.
+- [x] W2-11 인터페이스 동결: 스키마·해시 규칙·종료 코드를 문서에 확정, 변경 시 ADR — 증거: `docs/adr/0001-interface-freeze.md`.
 
 **게이트 G2**: `pipeline-smoke`와 `gate-negative`가 CI에서 초록이다. 이후 단계는 부품 교체이며 인터페이스를 바꾸지 않는다.
 
