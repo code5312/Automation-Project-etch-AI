@@ -33,13 +33,13 @@
 - [x] W1-05 라이선스 파일: 저장소 코드 Apache-2.0, `docker/Dockerfile.sim`(ViennaPS 포함) 환경은 GPL-3.0 조건 NOTICE에 별도 표기 [사용자 결정 2026-10-27, 근거는 정의서 §11], 의존성 라이선스 표 작성 — 증거: `reports/evidence/W1-05_license.md`, `LICENSE`, `NOTICE`.
 
 ### 스파이크 (각 시간 상자 안에서 판정표 작성: `W1-S_<번호>_*.md`)
-- [ ] W1-S0 CI에서 ViennaPS·PyG·torch_scatter 설치 성공 (실패 시 캐시·사전 빌드 이미지)
-- [ ] W1-S1 레시피 20개 실행: 소요 시간 분포(최소/평균/최대, 코어 수), 깊이 분포 → `depth_max`·입력 범위·총 레시피 수(N) 결정
-- [ ] W1-S2 같은 레시피·시드 2회 실행 → 스냅샷 일치 여부(불일치 시 비결정 요소·허용오차 정의)
-- [ ] W1-S3 모델 A 롤아웃 사전 시험: 레시피 3~5개, 소규모 과적합 후 다단계 예측이 발산하는지 확인
-- [ ] W1-S4 Docker 설치 확인 → `Dockerfile.sim` 빌드 → kind 클러스터 → `sim-job-local.yaml` 파드 4개 `Completed` → 파드 1개 삭제 후 재시도·이어하기 확인 (실패 시 `xargs -P` 경로 확정)
-- [ ] W1-S5 `MaterialIds` 0/10의 재료 매핑 확정 → `configs/etl/materials.yaml`
-- [ ] W1-S6 FNO 모듈 경로·시그니처를 설치본 소스에서 확인, 128×256 입력 forward/backward 1회, CPU 1에폭 시간 측정
+- [x] W1-S0 CI에서 ViennaPS·PyG·torch_scatter 설치 성공 — 증거: `W1-S0_ci_install.md`. 실제 GitHub Actions(run 40468419349) 4개 잡 모두 success.
+- [x] W1-S1 레시피 20개 실행: 소요 시간 분포(최소/평균/최대, 코어 수), 깊이 분포 → `depth_max`·입력 범위·총 레시피 수(N) 결정 — 증거: `W1-S1_timing.md`. K=2 축소 측정(시간상자), wall 10.7~252.2s(평균 76.3s), 깊이 0.50~22.92µm. depth_max=50µm 제안, N은 2주차 정지조건 구현 후 재검증 필요.
+- [x] W1-S2 같은 레시피·시드 2회 실행 → 스냅샷 일치 여부(불일치 시 비결정 요소·허용오차 정의) — 증거: `W1-S2_repro.md`. 점 개수·좌표·깊이 완전 일치(오차 0).
+- [x] W1-S3 모델 A 롤아웃 사전 시험: 레시피 3~5개, 소규모 과적합 후 다단계 예측이 발산하는지 확인 — 증거: `W1-S3_rollout.md`. 완만한 선형 드리프트(폭발적 발산 아님), 원인(미수렴 학습·엣지 고정) 명확 → 진행 가능(조건부).
+- [x] W1-S4 Docker 설치 확인 → `Dockerfile.sim` 빌드 → kind 클러스터 → `sim-job-local.yaml` 파드 4개 `Completed` → 파드 1개 삭제 후 재시도·이어하기 확인 — 증거: `W1-S4_kind.md`. 4/4 Completed, 파드 삭제 후 자동 재생성+skip 확인됨. cpu 리소스 과소 할당(1차 시도, 시간상자 초과로 중단) 발견·수정(cpu 1→6).
+- [x] W1-S5 `MaterialIds` 0/10의 재료 매핑 확정 → `configs/etl/materials.yaml` — 증거: `W1-S5_materials.md`. **0=mask, 10=Si로 확정**(seed `etl.py` 주석은 반대로 적혀 있었음, 주석만 틀리고 실제 연산은 정상).
+- [x] W1-S6 FNO 모듈 경로·시그니처를 설치본 소스에서 확인, 128×256 입력 forward/backward 1회, CPU 1에폭 시간 측정 — 증거: `W1-S6_fno.md`. `physicsnemo.models.fno.FNO`, forward 0.975s/backward 0.662s. torchvision 핀 없으면 import 자체가 깨짐을 확인.
 
 **게이트 G1** (모두 Yes 시 2주차 진행)
 1. 환경이 클린 상태에서 재현되는가 (CI 포함)
