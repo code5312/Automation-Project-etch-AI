@@ -1,0 +1,10 @@
+# 서빙 환경 (C7). CPU 전용. 컨테이너 전용 — 호스트에 직접 설치하지 않는다.
+# 2026-10-27 python:3.11-slim 컨테이너에서 실제 설치 확인(2단계). 증거: reports/evidence/W1-03_serve_install.md
+#   1) pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+#      (CPU 휠 인덱스를 쓰지 않으면 PyPI torch가 CUDA 라이브러리(~10GB)를 끌어온다)
+#   2) pip install fastapi==0.162.0 uvicorn==0.54.0 pydantic==2.14.1 numpy==2.4.6
+torch==2.14.1
+fastapi==0.162.0
+uvicorn==0.54.0
+pydantic==2.14.1
+numpy==2.4.6

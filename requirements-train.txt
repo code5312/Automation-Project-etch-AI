@@ -1,0 +1,24 @@
+# 학습·평가·ETL 환경 (C2~C6). ETL(C2)도 여기에 포함된다 — 설계서 §6: "환경은 세 개로
+# 분리한다. ViennaPS 환경(시뮬레이션), PhysicsNeMo 환경(ETL·학습·평가), 서빙 환경."
+# CPU 전용(GPU 없음 기본 가정). 컨테이너 전용 — 호스트에 직접 설치하지 않는다.
+# 2026-10-27 python:3.11-slim 컨테이너에서 실제 설치 확인. 증거: reports/evidence/W1-03_train_install.md
+#
+# 설치는 한 번에(-r 전체 설치)가 아니라 아래 순서로 한다(torch_scatter는 torch가 먼저
+# 설치되어 있어야 --no-build-isolation 소스 빌드가 가능하다). 2026-10-27 컨테이너에서
+# 정확히 이 순서로 검증했다(requirements-train.txt 한 번에 설치는 테스트하지 않음):
+#   1) pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
+#      (CPU 휠 인덱스를 쓰지 않으면 PyPI torch가 CUDA 라이브러리(~10GB)를 끌어온다)
+#   2) pip install nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1
+#   3) pip install --no-build-isolation torch_scatter==2.1.2   (build-essential/gcc/g++ 필요)
+#   4) pip install pyvista==0.49.1 numpy==2.4.6 scipy==1.17.1   (etl.py의 .vtp 읽기·거리장용)
+#
+# 아래 고정 버전 목록은 "무엇이 설치됐는지"의 기록이다. apt build-essential(gcc/g++)이
+# 먼저 있어야 한다.
+torch==2.14.1
+torchvision==0.29.1
+nvidia-physicsnemo==2.2.2
+torch_geometric==2.8.1
+torch_scatter==2.1.2
+pyvista==0.49.1
+numpy==2.4.6
+scipy==1.17.1

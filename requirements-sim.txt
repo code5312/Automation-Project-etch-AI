@@ -1,0 +1,14 @@
+# 시뮬레이션 환경 (C1: run_sim/sampling/sim_batch). Python 3.13 컨테이너 전용 — 호스트에 직접 설치하지 않는다.
+# 확인된 조합(CLAUDE.md) + 2026-10-27 python:3.13-slim 컨테이너에서 실제 설치 확인.
+# 증거: reports/evidence/W1-03_sim_install.md
+#
+# pyvista는 넣지 않는다 — .vtp 읽기(ETL)는 설계서 §6에 따라 PhysicsNeMo(train) 환경 쪽이다
+# (requirements-train.txt). C1 스크립트(run_sim/sampling/sim_batch)는 pyvista를 쓰지 않는다.
+#
+# 런타임(apt) 전제조건 — 아니면 `import viennaps`에서 libX11.so.6 등 ImportError:
+#   libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6
+# (docker/Dockerfile.sim에 반영됨)
+ViennaPS==4.5.0
+ViennaLS==5.8.5
+numpy==2.5.4
+scipy==1.18.1
