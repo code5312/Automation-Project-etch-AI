@@ -17,12 +17,14 @@ line-length = 100
 target-version = "py311"
 # seed/에서 그대로 옮긴 스파이크 원본 코드 — 내용을 수정하지 않기로 했으므로(사용자 지시)
 # 스타일 규칙에서 제외한다. 2주차 이후 정식 구현으로 교체되면서 자연히 없어질 예정.
+# reports/evidence/의 스크립트도 스파이크 1회용 코드라 같은 이유로 제외한다.
 extend-exclude = [
     "src/etchpipe/sim/run_sim.py",
     "src/etchpipe/sim/sampling.py",
     "src/etchpipe/sim/sim_batch.py",
     "src/etchpipe/etl/etl.py",
     "scripts/mgn_smoke_test.py",
+    "reports/evidence",
 ]
 
 [tool.ruff.lint]
