@@ -8,6 +8,11 @@ version = "0.1.0"
 description = "식각 공정 AI 대리 모델의 검증·재학습 자동화 파이프라인"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
+dependencies = [
+    "numpy==2.4.6",
+    "scipy==1.17.1",
+    "pyvista==0.49.1",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -19,10 +24,7 @@ target-version = "py311"
 # 스타일 규칙에서 제외한다. 2주차 이후 정식 구현으로 교체되면서 자연히 없어질 예정.
 # reports/evidence/의 스크립트도 스파이크 1회용 코드라 같은 이유로 제외한다.
 extend-exclude = [
-    "src/etchpipe/sim/run_sim.py",
-    "src/etchpipe/sim/sampling.py",
     "src/etchpipe/sim/sim_batch.py",
-    "src/etchpipe/etl/etl.py",
     "scripts/mgn_smoke_test.py",
     "reports/evidence",
 ]
