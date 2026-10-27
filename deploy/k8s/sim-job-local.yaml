@@ -1,0 +1,29 @@
+# 시뮬레이션 스윕: Indexed Job 하나가 샤드 N개를 병렬로 처리  [제안, 클러스터에서 아직 실행 안 해봄]
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: etch-sim-local
+spec:
+  completionMode: Indexed        # 파드마다 JOB_COMPLETION_INDEX(0..completions-1) 자동 주입
+  completions: 4                 # 로컬 시험용: 샤드 4개
+  parallelism: 2                 # 로컬 PC 사양에 맞춰 동시 2개
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: sim
+          image: etch-sim:0.1     # docker/Dockerfile.sim 으로 빌드
+          env:
+            - { name: SIM_SHARDS, value: "4" }
+            - { name: SIM_K,      value: "2" }
+            - { name: SIM_RAW,    value: "/data/raw" }
+          resources:
+            requests: { cpu: "1", memory: "2Gi" }
+            limits:   { cpu: "1", memory: "2Gi" }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: etch-data }   # 여러 노드면 ReadWriteMany 가능한 스토리지 필요

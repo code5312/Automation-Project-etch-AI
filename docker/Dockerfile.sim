@@ -1,0 +1,21 @@
+# 시뮬레이션 전용 이미지. 버전 조합은 샌드박스에서 import 확인한 것 (ViennaLS 5.9.0 은 실패)
+FROM python:3.13-slim
+
+# ViennaLS가 내부적으로 쓰는 VTK 바이너리에 필요(2026-10-27 컨테이너 테스트에서 확인,
+# reports/evidence/W1-03_sim_install.md). 없으면 `import viennaps`에서 libX11.so.6 ImportError.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements-sim.txt /app/requirements-sim.txt
+RUN pip install --no-cache-dir -r /app/requirements-sim.txt
+
+COPY src/etchpipe/sim/ /app/src/
+# data/recipes.json은 sampling.py 실행 결과물이다. 빌드 전에 미리 생성해 두어야 하는데
+# 생성 순서(빌드 전 vs 볼륨 마운트)는 아직 확정하지 않았다 [미확인, W1-S1/S4에서 확정].
+COPY data/recipes.json /app/data/recipes.json
+
+ENV PYTHONPATH=/app/src
+CMD ["python", "src/sim_batch.py"]

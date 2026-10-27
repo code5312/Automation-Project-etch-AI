@@ -1,0 +1,11 @@
+# 파드들이 결과를 모으는 공유 저장 공간. kind(노드 1개)에서는 기본 StorageClass 로 바로 만들어짐  [클러스터에서 아직 실행 안 해봄]
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: etch-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+ 

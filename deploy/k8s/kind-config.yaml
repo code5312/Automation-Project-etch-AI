@@ -1,0 +1,6 @@
+# kind 클러스터 설정: etch-pipeline 로컬 개발/시연용 단일 노드
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: etch-pipeline
+nodes:
+  - role: control-plane
