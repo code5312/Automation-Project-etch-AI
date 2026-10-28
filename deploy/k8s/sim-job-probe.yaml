@@ -1,0 +1,32 @@
+# W3-01 준비: 실제 운영값(K=20, depth_max=50 기본값)으로 1차 소규모(8건) 측정.
+# recipes.json은 이미지에 baked-in된 20건이 아니라 PVC의 /data/recipes.json(8건)을 쓴다
+# (SIM_RECIPES로 덮어씀) — 이미지 재빌드 없이 레시피만 바꾸기 위함.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: etch-sim-probe
+spec:
+  completionMode: Indexed
+  completions: 4
+  parallelism: 2
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: sim
+          image: etch-sim:0.1
+          env:
+            - { name: SIM_SHARDS, value: "4" }
+            - { name: SIM_K, value: "20" }
+            - { name: SIM_RAW, value: "/data/raw" }
+            - { name: SIM_RECIPES, value: "/data/recipes.json" }
+          resources:
+            requests: { cpu: "6", memory: "3Gi" }
+            limits: { cpu: "6", memory: "3Gi" }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: etch-data }
