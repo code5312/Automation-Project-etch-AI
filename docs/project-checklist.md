@@ -17,7 +17,7 @@
 | 증거 | 합격 기준 | 위치 | 주차 | 상태 |
 |---|---|---|---|---|
 | ① 게이트 차단 | 정상 통과, 노이즈·1에폭 모델 차단, 해시·골든 변조 차단(코드 2) | `reports/evidence/` + CI `gate-negative` 로그 | 2(더미), 5(실모델) | [ ] |
-| ② 재학습 완주 | 모니터→생성→변환→학습→게이트→승격 무개입 1회 완주, 전/후 오차 | `reports/evidence/retrain_*.json` | 6 | [ ] |
+| ② 재학습 완주 | 모니터→생성→변환→학습→게이트→승격, 무개입 **자동 반복(최대 4회, ADR-0002)** 포함 완주, 전/후 오차 | `reports/evidence/retrain_*.json` | 6 | [ ] |
 
 ---
 
@@ -75,6 +75,7 @@
 목표: 본 데이터 생성을 **백그라운드로 먼저 시작**하고, 그동안 ETL을 완성한다.
 
 - [ ] W3-01 S1 결과로 `configs/sim/base.yaml` 확정(`depth_max`, 범위, K, rays), `make_recipes`로 레시피 N건, `splits.json`(train/val/test/ood/golden)
+- [ ] W3-01-GPU (스파이크, 반나절 시간상자) Colab GPU 빌드로 r0004를 CPU와 동일 조건 재실행 → 물리 결과 오차·속도 이득 확인 후 N·시간 추정에 GPU 경로를 반영할지 판정. 근거: 정의서 §12 "필요 시 GPU 빌드 옵션 검토". 선행조건(사용자 직접): NVIDIA Developer 계정(OptiX SDK). 스크립트: `scripts/spike_w3_01_gpu_colab.py`, 판정표: `reports/evidence/W3-01-GPU_spike.md`
 - [ ] W3-02 본 데이터 생성 시작(kind Job 또는 `xargs -P`), 진행률·실패율 요약 스크립트, 실패 건 재시도
 - [ ] W3-03 ETL 완성: **부호 있는 SDF**(닫힌 폴리곤 안/밖), y 범위 자동 결정, 재료 매핑 적용 → FR-04 / 테스트: 직선·사각 트렌치에서 부호·값, 보잉 형상 안/밖, NaN 없음
 - [ ] W3-04 정규화 통계 `stats.json`(**train에서만**), `dataset_hash` 생성, 같은 입력=같은 출력 해시 일치 테스트 → FR-05
@@ -128,11 +129,11 @@
 
 ### ① 재학습 루프 (먼저)
 - [ ] W6-01 `configs/sim/live.yaml`(드리프트 오버라이드 `Substrate.A_ie` ×1.15), `sim_config_id` 반영
-- [ ] W6-02 모니터: 신규 레시피 10개를 live 설정으로 시뮬레이션 → champion 예측과 Chamfer 비교 → `drift_threshold`(= champion 골든 Chamfer × 1.5) 초과 시 트리거 → FR-09
-- [ ] W6-03 드리프트 데이터 60개 생성(train 40 / val 10 / golden_drift 10) → ETL → 새 `dataset_hash`
-- [ ] W6-04 미세조정(champion에서 3~5에폭) → 평가 → 게이트(golden_drift로 후보와 champion 채점) → 승격 또는 champion 유지
-- [ ] W6-05 `python -m etchpipe.retrain run` 단일 명령으로 전 과정 무개입 실행, `reports/evidence/retrain_<ts>.json` 기록
-- [ ] W6-06 **증거 ② 제출본**: 승격까지 완주한 실행 1회 이상 + 재학습 전/후 오차 표. 승격이 안 되면 train 100개·에폭·학습률 순으로 조정(원인과 시도 기록)
+- [ ] W6-02 모니터: 신규 레시피 10개를 live 설정으로 시뮬레이션 → champion 예측과 Chamfer 비교 → `drift_threshold`(= champion 골든 Chamfer × 1.5) 초과 시 **자동 반복 루프**(ADR-0002) 트리거 → FR-09
+- [ ] W6-03 드리프트 데이터 60개 생성(train 40 / val 10 / golden_drift 10) → ETL → 새 `dataset_hash` — 루프 1차 시도의 입력
+- [ ] W6-04 **자동 반복 루프 구현(최대 4회, ADR-0002)**: 1차 champion에서 3~5에폭 미세조정 → 게이트. BLOCK이면 2차(드리프트 train 40→100개 자동 확장 재생성, ViennaPS 추가 호출) → 게이트. BLOCK이면 3차(에폭 10~15) → 4차(학습률 조정) 순서로 자동 진행. 어느 시도든 PASS면 즉시 승격하고 루프 종료, 4회 모두 BLOCK이면 champion 유지 + 알림. 시도마다 게이트 결과 기록
+- [ ] W6-05 `python -m etchpipe.retrain run` 단일 명령으로 전 과정(에스컬레이션 루프 포함) 무개입 실행, `reports/evidence/retrain_<ts>.json`에 `attempts: [{attempt, config, gate_result}, ...]` 기록
+- [ ] W6-06 **증거 ② 제출본**: 승격까지 완주한 실행 1회 이상(자동 반복 과정 포함) + 재학습 전/후 오차 표 + 시도별 로그. 4회 모두 BLOCK이면 그 자체를 결과로 기록(사람이 사후 원인 분석, 이번 루프의 무개입 완주 정의는 깨지 않음)
 - [ ] W6-07 `retrain-demo` 수동 워크플로(소규모 설정)
 
 ### ② 서빙 (다음)
@@ -195,7 +196,7 @@
 | D4 롤아웃 실패 | 최종 프로파일 1장 예측으로 후퇴(W4 참조) |
 | kind 불가 | `xargs -P` 대체 경로(코드 동일) |
 | FNO CPU 학습 느림 | 격자 64×128, 그래도 어려우면 단순 비교로 축소 |
-| 재학습 승격 실패 | 드리프트 train 100개, 에폭·학습률 조정 |
+| 재학습 승격 실패(루프 1차 BLOCK) | 자동 반복 루프(ADR-0002)가 드리프트 train 100개 확장→에폭 증가→학습률 조정 순으로 자동 처리. 4회 모두 BLOCK이면 champion 유지 + 사람이 사후 분석 |
 | CI 설치 지연 | 캐시, 사전 빌드 이미지 |
 | 전체 지연 | 6주차 ③ → 7주차 대시보드 화면 수 → 선택 범위 순으로 축소 |
 
