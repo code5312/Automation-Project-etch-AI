@@ -74,7 +74,7 @@
 
 목표: 본 데이터 생성을 **백그라운드로 먼저 시작**하고, 그동안 ETL을 완성한다.
 
-- [ ] W3-01 S1 결과로 `configs/sim/base.yaml` 확정(`depth_max`, 범위, K, rays), `make_recipes`로 레시피 N건, `splits.json`(train/val/test/ood/golden)
+- [ ] W3-01 S1 결과로 `configs/sim/base.yaml` 확정(`depth_max`, 범위, K, rays), `make_recipes`로 레시피 N건, `splits.json`(train/val/test/ood/golden) — 1차 확정: `configs/sim/base.yaml`(2026-11-03). N=410(300/40/40/20/10) 시간예산 [확인, `W3-01_probe8_depthmax_kind.md`, parallelism=2 기준 약 2.7일]. `rays`·`grid_delta`는 정확도-속도 트레이드오프 검증 없이 [미확인] 상태로 보류 — 재검토 트리거: W3-03 ETL에서 표면 노이즈/부호 SDF 이상, 또는 W4 롤아웃 오차가 과도할 때. `make_recipes`/`make_splits` 실행 완료(2026-11-03) — 증거: `reports/evidence/W3-01_recipes_splits.md`(`scripts/gen_splits.py`, `data/recipes.json` 400건, `data/splits.json` train300/val40/test40/ood20, probe8 r0000~r0007 파라미터 불변 확인). 아직 남음: 골든셋(10) 선정 규칙(중심5·경계3·극단2) 알고리즘 결정 — ADR-0001 동결 스키마상 `splits.json`에 golden 키 추가 안 함.
 - [ ] W3-01-GPU (스파이크, 반나절 시간상자) Colab GPU 빌드로 r0004를 CPU와 동일 조건 재실행 → 물리 결과 오차·속도 이득 확인 후 N·시간 추정에 GPU 경로를 반영할지 판정. 근거: 정의서 §12 "필요 시 GPU 빌드 옵션 검토". 선행조건(사용자 직접): NVIDIA Developer 계정(OptiX SDK). 스크립트: `scripts/spike_w3_01_gpu_colab.py`, 판정표: `reports/evidence/W3-01-GPU_spike.md`
 - [ ] W3-02 본 데이터 생성 시작(kind Job 또는 `xargs -P`), 진행률·실패율 요약 스크립트, 실패 건 재시도
 - [ ] W3-03 ETL 완성: **부호 있는 SDF**(닫힌 폴리곤 안/밖), y 범위 자동 결정, 재료 매핑 적용 → FR-04 / 테스트: 직선·사각 트렌치에서 부호·값, 보잉 형상 안/밖, NaN 없음
