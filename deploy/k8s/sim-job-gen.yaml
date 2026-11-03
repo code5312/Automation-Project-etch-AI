@@ -1,0 +1,33 @@
+# W3-02: 본 데이터 생성(N=400, train300+val40+test40+ood20).
+# 리소스·parallelism은 W3-01 probe8(reports/evidence/W3-01_probe8_depthmax_kind.md)에서
+# 실측 검증된 조건(cpu=6, parallelism=2)과 동일하게 유지.
+# shard 40개 x 10레시피 — sim_batch.py가 (run_id 인덱스 % SIM_SHARDS == JOB_COMPLETION_INDEX)로 분배,
+# 레시피별 meta.json 존재 시 skip(재시작 시 중복 실행 안 함) — r0000~r0007(probe8)은 자동으로 건너뜀.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: etch-sim-gen
+spec:
+  completionMode: Indexed
+  completions: 40
+  parallelism: 2
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: sim
+          image: etch-sim:0.1
+          env:
+            - { name: SIM_SHARDS, value: "40" }
+            - { name: SIM_K, value: "20" }
+            - { name: SIM_RAW, value: "/data/raw" }
+            - { name: SIM_RECIPES, value: "/data/recipes.json" }
+          resources:
+            requests: { cpu: "6", memory: "3Gi" }
+            limits: { cpu: "6", memory: "3Gi" }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: etch-data }
