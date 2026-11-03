@@ -7,12 +7,16 @@ import numpy as np
 import pytest
 
 from etchpipe.etl.etl import (
+    DEPTH_MAX,
+    MASK_HEIGHT_MAX_OOD,
     THETA_KEYS,
+    auto_yr,
     compute_dataset_hash,
     dist_field,
     etl_run,
     metrics,
     process_dataset,
+    signed_dist_field,
     to_graph,
 )
 
@@ -64,6 +68,76 @@ def test_metrics_depth_is_negative_of_min_y() -> None:
     m = metrics(p)
     assert m["depth"] == 5.0
     assert m["ymin"] == -5.0
+
+
+# --- W3-03: 부호 있는 SDF / y 범위 자동 결정 ---------------------------------
+
+
+def test_auto_yr_covers_depth_max_and_mask_height_with_margin() -> None:
+    lo, hi = auto_yr()
+    assert lo <= -DEPTH_MAX
+    assert hi >= MASK_HEIGHT_MAX_OOD
+    assert lo < 0 < hi
+
+
+def test_signed_dist_field_sign_and_value_straight_line() -> None:
+    # 수평 직선(y=0): 아래(solid)=음수, 위(vacuum)=양수, 값은 수직 거리와 일치
+    p = np.array([[-10.0, 0.0], [10.0, 0.0]], dtype=np.float32)
+    lines = np.array([[0, 1]])
+    sdf = signed_dist_field(p, lines, nx=21, ny=21, xr=(-5, 5), yr=(-5, 5))
+    assert np.all(sdf[0] < 0)  # y=-5 행: solid
+    assert np.all(sdf[-1] > 0)  # y=5 행: vacuum
+    np.testing.assert_allclose(np.abs(sdf[0]), 5.0, atol=0.3)
+    np.testing.assert_allclose(np.abs(sdf[-1]), 5.0, atol=0.3)
+
+
+def test_signed_dist_field_rectangular_trench_sign_and_value() -> None:
+    # 사각 트렌치: 마스크 top y=5(폭 밖), 측벽 x=±2, 바닥 y=-3(폭 안)
+    p = np.array(
+        [[-10.0, 5.0], [-2.0, 5.0], [-2.0, -3.0], [2.0, -3.0], [2.0, 5.0], [10.0, 5.0]],
+        dtype=np.float32,
+    )
+    lines = np.array([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]])
+    sdf = signed_dist_field(p, lines, nx=41, ny=41, xr=(-10, 10), yr=(-10, 10))
+    gx = np.linspace(-10, 10, 41)
+    gy = np.linspace(-10, 10, 41)
+
+    def val(qx: float, qy: float) -> float:
+        return float(sdf[np.argmin(np.abs(gy - qy)), np.argmin(np.abs(gx - qx))])
+
+    assert val(0, 0) > 0  # 트렌치 안(바닥 위, 식각된 빈 공간) = vacuum
+    assert val(0, -5) < 0  # 트렌치 바닥보다 아래 = Si 벌크 = solid
+    assert val(-6, 2) < 0  # 트렌치 바깥, 마스크 아래 = solid
+    assert val(-6, 7) > 0  # 마스크 위 = vacuum
+    np.testing.assert_allclose(abs(val(0, -3)), 0.0, atol=0.6)  # 바닥 경계 위는 값~0
+
+
+def test_signed_dist_field_bowing_void_inside_outside() -> None:
+    """보잉(언더컷) 프로파일 단순화: solid 속에 완전히 둘러싸인 식각 공극(void) 하나.
+    한 x에서 경계를 2번 지나는(비단조) 프로파일에서도 even-odd 규칙이 맞는지 확인."""
+    n = 24
+    # 축에 꼭짓점이 안 걸리게 반칸 회전
+    ang = np.linspace(0, 2 * np.pi, n, endpoint=False) + np.pi / n
+    cx, cy, r = 0.0, -5.0, 1.5
+    p = np.stack([cx + r * np.cos(ang), cy + r * np.sin(ang)], 1).astype(np.float32)
+    lines = np.array([[i, (i + 1) % n] for i in range(n)])
+    sdf = signed_dist_field(p, lines, nx=31, ny=31, xr=(-3, 3), yr=(-8, -2))
+    gx = np.linspace(-3, 3, 31)
+    gy = np.linspace(-8, -2, 31)
+
+    def val(qx: float, qy: float) -> float:
+        return float(sdf[np.argmin(np.abs(gy - qy)), np.argmin(np.abs(gx - qx))])
+
+    assert val(0.0, -5.0) > 0  # 공극 중심 = vacuum
+    assert val(0.0, -2.0) < 0  # 공극 위쪽 solid(원 바깥, 2번째 교차 지남)
+    assert val(0.0, -8.0) < 0  # 공극 아래쪽 solid(원 바깥, 교차 전)
+
+
+def test_signed_dist_field_no_nan() -> None:
+    p = np.array([[-10.0, 0.0], [0.0, -3.0], [10.0, 0.0]], dtype=np.float32)
+    lines = np.array([[0, 1], [1, 2]])
+    sdf = signed_dist_field(p, lines, nx=50, ny=50, xr=(-10, 10), yr=(-10, 10))
+    assert not np.isnan(sdf).any()
 
 
 # --- 픽스처(tests/fixtures/raw) 기반 ----------------------------------------

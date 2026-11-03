@@ -1,6 +1,6 @@
 """C2: raw(.vtp) -> processed(그래프 npz + 거리장 npz + 지표 + dataset_hash/manifest).
 
-Curator 래핑 전의 순수 파이썬 버전. SDF(부호 있는 거리장)는 3주차(W3-03)에서 완성한다.
+Curator 래핑 전의 순수 파이썬 버전. SDF(부호 있는 거리장)는 W3-03에서 완성.
 """
 
 import hashlib
@@ -51,17 +51,102 @@ def to_graph(
     return node_feat.astype(np.float32), ei.astype(np.int64), edge_feat.astype(np.float32)
 
 
+# y 범위 자동 결정(W3-03)에 쓰는 값들의 근거:
+#  - DEPTH_MAX: configs/sim/base.yaml sim.depth_max(정지조건) [확인]
+#  - MASK_HEIGHT_MAX_OOD: sampling.py SPACE의 mask_height hi=14.0에
+#    make_ood_recipes의 extend=1.5(= configs/sim/base.yaml ood.extend)를 적용한 최대값
+#    14 + (14-6)*(1.5-1) = 18.0 [확인, sampling.make_ood_recipes 공식과 동일 계산]
+#  옛 하드코딩 yr=(-30, 12)는 depth_max=50 적용 전 값이라 현재 depth_max를 담지 못해
+#  깊은 레시피에서 바닥이 잘리는 버그였다 — 이번에 config 근거로 교체.
+DEPTH_MAX = 50.0
+MASK_HEIGHT_MAX_OOD = 18.0
+Y_MARGIN = 3.0  # 정지조건 오버슈트·그리드 경계 효과 대비 여유 [제안]
+
+
+def auto_yr(
+    depth_max: float = DEPTH_MAX,
+    mask_height_max: float = MASK_HEIGHT_MAX_OOD,
+    margin: float = Y_MARGIN,
+) -> tuple[float, float]:
+    """거리장 y 격자 범위를 하드코딩 대신 depth_max·mask_height_max(OOD 포함)에서 자동 결정."""
+    return (-(depth_max + margin), mask_height_max + margin)
+
+
 def dist_field(
     p: np.ndarray,
     nx: int = 256,
     ny: int = 128,
     xr: tuple[float, float] = (-15, 15),
-    yr: tuple[float, float] = (-30, 12),
+    yr: tuple[float, float] | None = None,
 ) -> np.ndarray:
-    """부호 없는 거리장(UDF). 부호는 3주차 과제(W3-03) [제안]."""
+    """부호 없는 거리장(UDF, 각 격자점에서 가장 가까운 경계점까지 거리)."""
+    if yr is None:
+        yr = auto_yr()
     gx, gy = np.meshgrid(np.linspace(*xr, nx), np.linspace(*yr, ny))
     d, _ = cKDTree(p).query(np.stack([gx.ravel(), gy.ravel()], 1))
     return d.reshape(ny, nx).astype(np.float32)
+
+
+def _inside_solid(
+    x: np.ndarray, y: np.ndarray, p: np.ndarray, lines: np.ndarray, y_below: float
+) -> np.ndarray:
+    """짝수-홀수 규칙(even-odd rule)으로 격자점마다 solid(마스크+Si) 내부 여부 판정.
+    항상 solid인 바닥(y_below)에서 점까지 수직 반직선을 쏴 경계 선분과 교차하는 횟수를 센다
+    — 횟수가 짝수면 바닥과 같은 상태(내부), 홀수면 뒤집힌 상태(외부/vacuum).
+    언더컷·보잉처럼 한 x에서 경계를 여러 번 지나는 비단조 프로파일도 교차 횟수만 세면 되므로
+    닫힌 폴리곤 가정 없이 그대로 맞는다."""
+    crossings = np.zeros(x.shape, dtype=np.int64)
+    for a, b in lines:
+        x1, y1 = p[a]
+        x2, y2 = p[b]
+        if x1 == x2:
+            continue  # 수직 선분은 수직 반직선과 만나지 않음(측면 접촉, 측도 0)
+        lo_x, hi_x = (x1, x2) if x1 < x2 else (x2, x1)
+        in_x = (x >= lo_x) & (x < hi_x)  # 반개구간: 꼭짓점 중복 계산 방지
+        t = (x - x1) / (x2 - x1)
+        y_at = y1 + t * (y2 - y1)
+        crossings += (in_x & (y_at <= y) & (y_at > y_below)).astype(np.int64)
+    return crossings % 2 == 0
+
+
+def _dist_to_segments(x: np.ndarray, y: np.ndarray, p: np.ndarray, lines: np.ndarray) -> np.ndarray:
+    """격자점마다 가장 가까운 선분(점이 아니라 선분 자체)까지의 최단거리.
+    cKDTree(p).query는 꼭짓점까지 거리라 선분이 길고 꼭짓점이 드물면 값이 부정확해진다
+    — 실측 스냅샷처럼 점이 촘촘하면 거의 같지만, 부호 있는 값 검증(해석적 입력)에는
+    선분 기준 거리가 필요하다."""
+    dist = np.full(x.shape, np.inf, dtype=np.float64)
+    for a, b in lines:
+        x1, y1 = p[a]
+        x2, y2 = p[b]
+        dx, dy = x2 - x1, y2 - y1
+        seg_len2 = dx * dx + dy * dy
+        if seg_len2 == 0:
+            d = np.hypot(x - x1, y - y1)
+        else:
+            t = np.clip(((x - x1) * dx + (y - y1) * dy) / seg_len2, 0.0, 1.0)
+            d = np.hypot(x - (x1 + t * dx), y - (y1 + t * dy))
+        np.minimum(dist, d, out=dist)
+    return dist
+
+
+def signed_dist_field(
+    p: np.ndarray,
+    lines: np.ndarray,
+    nx: int = 256,
+    ny: int = 128,
+    xr: tuple[float, float] = (-15, 15),
+    yr: tuple[float, float] | None = None,
+) -> np.ndarray:
+    """부호 있는 거리장(SDF). solid(마스크+Si) 내부=음수, vacuum(식각된 공간)=양수
+    [제안: 부호 규약 — 레벨셋/그래픽스에서 흔한 "내부 음수" 관례를 따름, 다른 근거 없음]."""
+    if yr is None:
+        yr = auto_yr()
+    gx, gy = np.meshgrid(np.linspace(*xr, nx), np.linspace(*yr, ny))
+    x, y = gx.ravel(), gy.ravel()
+    dist = _dist_to_segments(x, y, p, lines)
+    inside = _inside_solid(x, y, p, lines, y_below=yr[0] - 1.0)
+    sign = np.where(inside, -1.0, 1.0)
+    return (sign * dist).reshape(ny, nx).astype(np.float32)
 
 
 def metrics(p: np.ndarray) -> dict:
@@ -84,7 +169,7 @@ def etl_run(
         p, lines, mid, nv = load_snapshot(s)
         nf, ei, ef = to_graph(p, lines, mid, nv, theta, k * meta["step_min"])
         np.savez_compressed(out / f"g{k:03d}.npz", node=nf, edge_index=ei, edge=ef, pos=p)
-        np.save(out / f"udf{k:03d}.npy", dist_field(p))
+        np.save(out / f"sdf{k:03d}.npy", signed_dist_field(p, lines))
         rows.append({"k": k, "n_nodes": int(len(p)), **metrics(p)})
     json.dump(rows, open(out / "metrics.json", "w"), indent=1)
     return rows
