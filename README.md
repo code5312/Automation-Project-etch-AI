@@ -4,7 +4,7 @@
 
 상세 사양은 `docs/project-definition.md`(무엇을 왜), `docs/project-design.md`(컴포넌트·API), `docs/project-checklist.md`(주차별 작업)를 참조한다.
 
-현재 1주차(스켈레톤) 단계이며 설치·실행 가능한 데모는 아직 없다. 진행 상황은 `docs/project-checklist.md`의 체크박스와 `reports/evidence/`를 기준으로 판단한다.
+진행 중이며 설치·실행 가능한 전체 데모는 아직 없다. 진행 상황(몇 주차까지 끝났는지 포함)은 `docs/project-checklist.md`의 체크박스와 `reports/evidence/`를 기준으로 판단한다 — 이 README에 주차를 못박지 않는다(stale 방지).
 
 ## 라이선스
 

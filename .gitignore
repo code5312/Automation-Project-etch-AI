@@ -8,6 +8,10 @@
 reports/*
 !reports/evidence
 !reports/evidence/**
+# reports/evidence/는 통째로 추적 대상이라, 임시로 떨어뜨린 원본 로그(.raw.log)가 그대로
+# git status에 잡혀 섞여 들어갈 수 있다(2026-11-03, 중단한 xargs 스파이크의 잔여 로그가
+# 실제로 이렇게 재생성된 적 있음). 증거는 .md 요약이지 원본 로그가 아니므로 막아둔다.
+reports/evidence/*.raw.log
 
 # 대용량 메시 (golden/·tests/fixtures/는 예외)
 *.vtp

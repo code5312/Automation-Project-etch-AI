@@ -7,8 +7,8 @@ etch-sim-gen 파드에 kubectl exec로 들어가 /data를 조회한다. Job이 �
 
 사용법:
   python scripts/sim_progress.py                 # 진행률·실패율만 출력
-  python scripts/sim_progress.py --retry          # Job이 Failed 상태면 delete+재적용(멱등, meta.json
-                                                   # 존재 여부로 완료분은 자동 skip)
+  python scripts/sim_progress.py --retry          # Job이 Failed 상태면 delete+재적용
+                                                   # (멱등, 완료분은 meta.json으로 자동 skip)
 """
 
 import argparse
@@ -75,7 +75,10 @@ def summary() -> tuple[set[str], set[str]]:
     pending = sorted(all_ids - done)
     pct = len(done) / len(all_ids) * 100
 
-    print(f"전체 {len(all_ids)} / 완료 {len(done)} / 대기 {len(pending)} / 마지막 시도 실패 {len(failed)}")
+    print(
+        f"전체 {len(all_ids)} / 완료 {len(done)} / 대기 {len(pending)} "
+        f"/ 마지막 시도 실패 {len(failed)}"
+    )
     print(f"진행률: {pct:.1f}%")
     if failed:
         print("최근 실패(자동 OnFailure 재시도로 이미 해소됐을 수 있음):", sorted(failed))
@@ -83,14 +86,11 @@ def summary() -> tuple[set[str], set[str]]:
         print("대기 중:", pending)
 
     job_status = json.loads(_kubectl("get", "job", JOB_NAME, "-o", "json"))["status"]
+    conditions = [c["type"] for c in job_status.get("conditions", [])]
     print(
-        "Job status: succeeded=%s failed=%s active=%s conditions=%s"
-        % (
-            job_status.get("succeeded", 0),
-            job_status.get("failed", 0),
-            job_status.get("active", 0),
-            [c["type"] for c in job_status.get("conditions", [])],
-        )
+        f"Job status: succeeded={job_status.get('succeeded', 0)} "
+        f"failed={job_status.get('failed', 0)} active={job_status.get('active', 0)} "
+        f"conditions={conditions}"
     )
     return done, failed
 

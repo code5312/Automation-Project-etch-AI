@@ -1,8 +1,8 @@
-# 시뮬레이션 스윕: Indexed Job 하나가 샤드 N개를 병렬로 처리  [제안, 클러스터에서 아직 실행 안 해봄]
-# [확인, W1-S4] 로컬 kind 테스트(sim-job-local.yaml)에서 cpu:"2"는 너무 적어 심하게 쓰로틀링됨을
-# 확인함(ViennaPS 레이트레이싱이 내부 12~13스레드 사용, W1-S1). 아래 cpu:"2"도 같은 문제가
-# 있을 가능성이 높다 — 실제 클러스터 노드의 코어 수를 모르므로[미확인] 여기 숫자는 임의로
-# 바꾸지 않았다. 실클러스터 확보 시 노드당 코어 수 대비 parallelism·cpu를 재조정해야 한다.
+# **superseded — 더 쓰지 않음.** 이 파일의 cpu:"2"/parallelism:8은 W1-S4에서 이미 쓰로틀링 위험이
+# 있다고 [미확인]으로 남겨둔 추정치였고, "실제 노드 사양 확인 후 W3-02에서 확정" 예정이었다.
+# W3-02에서 probe8 실측(`reports/evidence/W3-01_probe8_depthmax_kind.md`)으로 cpu=6/parallelism=2가
+# 맞는 값으로 확정됐고, 그 결과물은 이 파일을 고치는 대신 `deploy/k8s/sim-job-gen.yaml`로 새로 만들었다.
+# 지금 본 데이터 생성에 쓰는 건 `sim-job-gen.yaml`이다 — 이 파일(cpu:"2")을 그대로 적용하면 안 됨.
 apiVersion: batch/v1
 kind: Job
 metadata:

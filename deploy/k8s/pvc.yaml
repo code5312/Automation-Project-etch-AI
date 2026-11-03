@@ -1,4 +1,5 @@
-# 파드들이 결과를 모으는 공유 저장 공간. kind(노드 1개)에서는 기본 StorageClass 로 바로 만들어짐  [클러스터에서 아직 실행 안 해봄]
+# 파드들이 결과를 모으는 공유 저장 공간. kind(노드 1개)에서는 기본 StorageClass 로 바로 만들어짐
+# [확인, W1-S4/W3-01/W3-02에서 실사용 — bound 상태로 sim-job-probe/sim-job-gen/디버그 파드가 공유]
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
