@@ -1,0 +1,56 @@
+# W3-01: 본 데이터 생성 설정 동결.
+# 근거: reports/evidence/W1-S1_timing.md, W3-01_probe.md, W3-01_depth_max_revalidation.md,
+#       W3-01_probe8_depthmax_kind.md
+# 태그 규칙(CLAUDE.md): [확인] 실행 검증됨 / [제안] 문서 근거만 있음 / [미확인] 근거 없는 기본값
+# 변경 시: 범위·split 비율은 project-definition.md 수정 + DOC- 항목. 그 외 값은 ADR.
+
+seed: 20261027
+# make_recipes/make_splits 시드. data/recipes.json(20건, probe8 r0000~r0007 포함)을 만든 시드와
+# 동일하게 유지 — Sobol(scramble=True, seed 고정)은 요청 개수(n_total)가 달라져도 앞쪽 포인트가
+# 그대로 보존됨을 확인함(2026-11-03, scipy.stats.qmc 재현 테스트, max diff=0.0) [확인].
+# 즉 이 seed로 400+건을 다시 뽑아도 r0000~r0007은 지금까지 측정한 probe8 결과와 동일한 레시피가 된다.
+
+sim:
+  K: 20                 # 스텝 상한 [제안: 정의서 §7.2 "20~30" 범위의 하한 채택, 별도 검증 없음]
+  depth_max: 50.0        # µm, 조기 종료 기준 [확인: W1-S1에서 제안 -> W3-01_depth_max_revalidation.md,
+                          # W3-01_probe8_depthmax_kind.md에서 8건 중 5건 조기종료 동작 실측 확인]
+  rays: 300               # [미확인: seed 코드 기본값 그대로 채택. 정확도-속도 트레이드오프 스파이크 없음.
+                          #           설계서 §14 S0~S6에 애초에 없는 항목 — 보류, 아래 "보류 항목" 참조]
+  grid_delta: 0.3          # µm [미확인: 위와 동일한 이유로 보류]
+  step_min: 1.0            # 분/스텝 [미확인: seed 코드 기본값]
+
+sampler: sobol  # [확인: design.md §5 예시, sampling.py 구현과 일치]
+
+space:  # Θ 7개. 정의서 §7.1, sampling.py의 SPACE와 동일해야 함(바꾸면 양쪽 다 갱신) [제안]
+  ion_flux:        { low: 3.0,    high: 30.0,    scale: log }      # ionFlux
+  etchant_flux:    { low: 1350.0, high: 13500.0, scale: log }      # etchantFlux
+  oxygen_flux:     { low: 240.0,  high: 2400.0,  scale: log }      # passivationFlux
+  ion_mean_energy: { low: 50.0,   high: 200.0,   scale: linear }   # Ions.meanEnergy
+  ion_exponent:    { low: 100.0,  high: 1000.0,  scale: log }      # Ions.exponent
+  mask_width:      { low: 6.0,    high: 14.0,    scale: linear }   # µm, MakeTrench(trenchWidth)
+  mask_height:     { low: 6.0,    high: 14.0,    scale: linear }   # µm, MakeTrench(maskHeight)
+
+ood:
+  extend: 1.5   # 학습 범위 바깥 배수 [미확인: 정의서에 배수 명시 없음, 코드 기본값 그대로]
+
+splits:         # 정의서 §7.3·§7.4와 동일 [제안: NVIDIA 와류 예제 비율을 참고한 시작점, 통계적 근거 아님]
+  n_train: 300
+  n_val: 40
+  n_test: 40
+  n_ood: 20
+  n_golden: 10
+  # 골든셋 선정 규칙(중심 5·경계 3·극단 2)은 아직 구현 없음 [미확인] — W3-06에서 알고리즘 결정 필요.
+  # drift(train 40/val 10/golden_drift 10)는 이 파일 범위 밖(W6-01, configs/sim/live.yaml).
+
+exec:
+  parallelism: 2   # [확인: W3-01_probe8_depthmax_kind.md, kind Indexed Job cpu=6 x 2에서 실측]
+  cpu_per_job: 6
+  path: kind       # deploy/k8s/sim-job-probe.yaml 패턴을 N=410로 확장. xargs는 대체 경로(G1 기준 5)로 남겨둠
+
+# --- 보류 항목(지금 조정하지 않음, 계획대로 진행) ---
+# 1. rays=300, grid_delta=0.3: 정확도-속도 트레이드오프 검증 스파이크가 설계서 §14(S0~S6)에
+#    원래 없었음. 지금 추가하면 시간상자 없이 일정 지연 위험(CLAUDE.md 규칙 5).
+#    재검토 트리거: W3-03 ETL 검증에서 표면 노이즈/부호 SDF 이상 발견 시, 또는
+#    W4 모델 학습에서 롤아웃 오차가 설명 안 되는 수준으로 크게 나올 시.
+# 2. 파라미터 범위(space)·split 비율: project-definition.md §7.1/§7.3/§7.4가 이미 정한 값.
+#    바꾸려면 DOC- 항목 + 문서 수정이 먼저(코드에만 반영 금지).
