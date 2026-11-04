@@ -4,6 +4,7 @@ API 키 필수: ETCH_API_KEY 환경변수가 없으면 기동 자체를 거부�
 환경변수로만). /health는 키 없이도 동작(헬스체크는 오케스트레이터가 호출하므로).
 """
 
+import hmac
 import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -23,7 +24,10 @@ _API_KEY = _require_api_key_env()
 
 
 def check_api_key(x_api_key: str | None = Header(default=None)) -> None:
-    if x_api_key != _API_KEY:
+    # W3-10: 상수시간 비교(hmac.compare_digest) — `!=`는 앞에서부터 다른 문자를
+    # 만나면 바로 멈추는 short-circuit 비교라 응답시간차로 키를 추측하는 타이밍
+    # 공격 이론상 가능 [제안, 코드리뷰로 발견].
+    if x_api_key is None or not hmac.compare_digest(x_api_key, _API_KEY):
         raise HTTPException(status_code=401, detail="invalid API key")
 
 

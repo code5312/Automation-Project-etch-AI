@@ -7,6 +7,7 @@ import hashlib
 import json
 import pathlib
 import sys
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import pyvista as pv
@@ -190,15 +191,36 @@ def process_dataset(
     splits: dict[str, list[str]],
     out_root: str | pathlib.Path,
     theta_keys: list[str],
+    max_workers: int | None = 1,
 ) -> dict:
     """splits(train/val/test/ood -> run_id 리스트)를 raw_dir에서 읽어
-    out_root/<dataset_hash>/graphs/<run_id>/에 쓰고 manifest.json·splits.json을 남긴다."""
+    out_root/<dataset_hash>/graphs/<run_id>/에 쓰고 manifest.json·splits.json을 남긴다.
+
+    run_id마다 출력 경로가 독립적이라(공유 상태 없음) max_workers로 run_id 단위
+    ProcessPoolExecutor 병렬화를 켤 수 있다. 기본값 1(직렬)은 기존 동작과 동일 —
+    프로세스 풀 생성 자체에 고정 비용(Windows에서 실측 약 1초/워커)이 있어 레시피
+    수가 적으면(테스트 픽스처 등) 병렬화가 오히려 손해다. 레시피가 많은 본 데이터
+    생성(N=400 규모)에서만 호출자가 명시적으로 max_workers>1을 넘기는 걸 의도함.
+    signed_dist_field 내부를 (E,N) 브로드캐스트로 벡터화하는 방향은 실측상
+    역효과였음(W3-09 평가, reports/evidence/W3-09_etl_parallel.md) — run_id 단위
+    병렬화만 적용."""
     run_ids = sorted({rid for group in splits.values() for rid in group})
     dataset_hash = compute_dataset_hash(run_ids, raw_dir)
     out = pathlib.Path(out_root) / dataset_hash
     (out / "graphs").mkdir(parents=True, exist_ok=True)
-    for rid in run_ids:
-        etl_run(pathlib.Path(raw_dir) / rid, out / "graphs" / rid, theta_keys)
+    raw = pathlib.Path(raw_dir)
+
+    if max_workers == 1 or len(run_ids) <= 1:
+        for rid in run_ids:
+            etl_run(raw / rid, out / "graphs" / rid, theta_keys)
+    else:
+        with ProcessPoolExecutor(max_workers=max_workers) as ex:
+            futures = [
+                ex.submit(etl_run, raw / rid, out / "graphs" / rid, theta_keys) for rid in run_ids
+            ]
+            for fut in futures:
+                fut.result()  # 워커 예외를 여기서 바로 전파(조용히 묻히지 않도록)
+
     json.dump(splits, open(out / "splits.json", "w"), indent=1)
     manifest = {
         "dataset_hash": dataset_hash,

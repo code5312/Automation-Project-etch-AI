@@ -26,6 +26,13 @@ def test_model_without_api_key_is_401() -> None:
     assert resp.status_code == 401
 
 
+def test_model_with_wrong_api_key_is_401() -> None:
+    """W3-10: hmac.compare_digest로 교체 후에도 틀린 키는 여전히 401이어야 한다
+    (상수시간 비교로 바뀌어도 판정 결과는 동일해야 함)."""
+    resp = client.get("/model", headers={"x-api-key": API_KEY + "x"})
+    assert resp.status_code == 401
+
+
 def test_model_with_api_key_is_200() -> None:
     resp = client.get("/model", headers={"x-api-key": API_KEY})
     assert resp.status_code == 200

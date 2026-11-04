@@ -195,3 +195,29 @@ def test_process_dataset_writes_manifest_and_splits(tmp_path: Path) -> None:
     assert manifest["splits_sizes"] == {"train": 2, "val": 1, "test": 0, "ood": 0}
     for rid in ("r0000", "r0001", "r0002"):
         assert (out / "graphs" / rid / "metrics.json").exists()
+
+
+@pytest.mark.skipif(not FIXTURE_ROOT.exists(), reason="fixtures 없음")
+def test_process_dataset_parallel_matches_serial(tmp_path: Path) -> None:
+    """W3-09: max_workers>1(ProcessPoolExecutor)과 기본값 1(직렬)의 결과가 바이트 단위로 같아야 한다
+    — 레시피 단위 분할만 다를 뿐 각 run_id의 변환 결과는 동일해야 함."""
+    splits = {"train": ["r0000", "r0001"], "val": ["r0002"], "test": [], "ood": []}
+
+    out_serial = tmp_path / "serial"
+    manifest_serial = process_dataset(FIXTURE_ROOT, splits, out_serial, THETA_KEYS, max_workers=1)
+
+    out_parallel = tmp_path / "parallel"
+    manifest_parallel = process_dataset(
+        FIXTURE_ROOT, splits, out_parallel, THETA_KEYS, max_workers=2
+    )
+
+    assert manifest_serial == manifest_parallel
+    dh = manifest_serial["dataset_hash"]
+    for rid in ("r0000", "r0001", "r0002"):
+        a = (out_serial / dh / "graphs" / rid / "metrics.json").read_bytes()
+        b = (out_parallel / dh / "graphs" / rid / "metrics.json").read_bytes()
+        assert a == b
+        for k in range(4):
+            sdf_a = np.load(out_serial / dh / "graphs" / rid / f"sdf{k:03d}.npy")
+            sdf_b = np.load(out_parallel / dh / "graphs" / rid / f"sdf{k:03d}.npy")
+            assert np.array_equal(sdf_a, sdf_b)

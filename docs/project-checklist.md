@@ -83,6 +83,16 @@
 - [ ] W3-06 골든셋 확정: `golden/raw/` 10개 복사, `golden.json`, `golden_hash`, 변경 시 테스트 실패
 - [ ] W3-07 베이스라인 2종: (a) 변위 0, (b) 레시피→깊이 MLP 후 직선 외삽, val 지표 기록
 - [ ] W3-08 데이터 카드 초안(생성 방법·범위·알려진 한계·시뮬레이터 버전)
+- [x] W3-09 (계획 외 추가, 코드 리뷰로 발견) ETL 성능: `process_dataset`에 run_id 단위
+  `ProcessPoolExecutor` 병렬화(`max_workers`, 기본값 1=기존과 동일, 회귀 없음) 추가.
+  (E,N) 완전 벡터화는 실측상 6배 역효과(0.148s→0.928s)라 기각하고 레시피 단위
+  병렬화만 적용 — 완료(2026-11-03) 증거: `reports/evidence/W3-09_etl_parallel.md`
+  (`PYTHONPATH=src python -m pytest tests/unit/test_etl.py -q` → 15 passed, 직렬/병렬
+  dataset_hash·sdf 배열 동일 확인).
+- [x] W3-10 (계획 외 추가, 코드 리뷰로 발견) 서빙 API 키 비교를 `hmac.compare_digest`로
+  교체(`!=` short-circuit 비교의 타이밍 공격 이론적 가능성 제거) — 완료(2026-11-03)
+  증거: `reports/evidence/W3-10_api_key_timing.md`(틀린 키 401·맞는 키 200 재확인,
+  Windows 소켓 환경 이슈는 이번 변경과 무관한 기존 이슈로 별도 기록).
 
 **게이트 G3**: train/val/test/ood가 로드되고, 데이터 검증이 통과하며, 베이스라인 지표가 있다. 생성이 덜 끝났어도 현재 완료분으로 `v1`을 고정하고 진행한다.
 
