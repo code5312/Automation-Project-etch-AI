@@ -53,7 +53,10 @@ import os
 os.environ["CMAKE_ARGS"] = "-DVIENNAPS_USE_GPU=ON"
 !git clone --branch v4.5.0 --depth 1 https://github.com/ViennaTools/ViennaPS.git /content/ViennaPS
 %cd /content/ViennaPS
-!pip install .
+!pip install --no-deps .
+# --no-deps: pyproject.toml의 dependencies=["ViennaLS>=5.7.2"] 때문에 pip가 의존성을
+# 다시 확인하면서 셀 4에서 소스로 빌드해 둔 ViennaLS를 PyPI 휠로 덮어쓸 위험을 막음
+# (공식 설치 스크립트 python/scripts/install_ViennaPS.py도 이 옵션을 씀, 2026-11-04 확인).
 %cd /content
 """
 
