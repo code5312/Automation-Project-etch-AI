@@ -12,12 +12,15 @@ from etchpipe.etl.etl import (
     THETA_KEYS,
     auto_yr,
     compute_dataset_hash,
+    compute_stats,
     dist_field,
     etl_run,
     metrics,
     process_dataset,
     signed_dist_field,
     to_graph,
+    validate_dataset,
+    validate_run,
 )
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "raw"
@@ -133,6 +136,50 @@ def test_signed_dist_field_bowing_void_inside_outside() -> None:
     assert val(0.0, -8.0) < 0  # 공극 아래쪽 solid(원 바깥, 교차 전)
 
 
+def test_signed_dist_field_excludes_internal_material_interface() -> None:
+    """실측 버그(2026-11-06, r0001 t000.vtp에서 재현): ViennaPS가 addInterfaces=True로
+    내보내는 메시에는 solid-vacuum 외곽 경계뿐 아니라 solid-solid 내부 경계(마스크가
+    덮어서 아직 vacuum에 노출되지 않은 Si 상단)도 같은 선분 배열에 MaterialIds 구분 없이
+    섞여 있다. 이 내부 경계를 그대로 두면 짝수-홀수 교차 판정이 깨져 마스크 몸통
+    내부가 vacuum으로 잘못 나왔다. 실제 메시 구조를 최소 형태로 재현(마스크 좌우
+    블록 + 트렌치 오프닝 + 마스크 밑에 숨은 내부 경계선)해 회귀를 막는다."""
+    p = np.array(
+        [
+            [-10.0, 0.0],  # 0: 마스크 밑 숨은 경계(내부) 왼쪽 끝 — 도메인 경계
+            [-3.0, 0.0],  # 1: 분기점(왼쪽) — degree 3
+            [-10.0, 5.0],  # 2: 마스크 top-left — 도메인 경계
+            [-3.0, 5.0],  # 3: 마스크 top-left 모서리
+            [3.0, 0.0],  # 4: 분기점(오른쪽) — degree 3
+            [3.0, 5.0],  # 5: 마스크 top-right 모서리
+            [10.0, 0.0],  # 6: 마스크 밑 숨은 경계(내부) 오른쪽 끝 — 도메인 경계
+            [10.0, 5.0],  # 7: 마스크 top-right — 도메인 경계
+        ],
+        dtype=np.float32,
+    )
+    lines = np.array(
+        [
+            [0, 1],  # 내부 경계(왼쪽, 마스크에 덮인 Si 상단) — 제외돼야 함
+            [1, 4],  # 트렌치 오프닝 바닥(Si-vacuum, 실제 외곽 경계) — 유지돼야 함
+            [4, 6],  # 내부 경계(오른쪽) — 제외돼야 함
+            [2, 3],  # 마스크 top(왼쪽)
+            [3, 1],  # 마스크 측벽(왼쪽)
+            [4, 5],  # 마스크 측벽(오른쪽)
+            [5, 7],  # 마스크 top(오른쪽)
+        ]
+    )
+    sdf = signed_dist_field(p, lines, nx=41, ny=41, xr=(-10, 10), yr=(-10, 10))
+    gx = np.linspace(-10, 10, 41)
+    gy = np.linspace(-10, 10, 41)
+
+    def val(qx: float, qy: float) -> float:
+        return float(sdf[np.argmin(np.abs(gy - qy)), np.argmin(np.abs(gx - qx))])
+
+    assert val(-6, 2) < 0  # 마스크 몸통 안쪽(내부 경계 밑에 숨어있던 버그 지점) = solid
+    assert val(-6, 10) > 0  # 마스크 위 = vacuum
+    assert val(0, 2) > 0  # 트렌치 오프닝 안 = vacuum
+    assert val(-6, -2) < 0  # Si 벌크 = solid
+
+
 def test_signed_dist_field_no_nan() -> None:
     p = np.array([[-10.0, 0.0], [0.0, -3.0], [10.0, 0.0]], dtype=np.float32)
     lines = np.array([[0, 1], [1, 2]])
@@ -190,6 +237,7 @@ def test_process_dataset_writes_manifest_and_splits(tmp_path: Path) -> None:
     out = tmp_path / manifest["dataset_hash"]
     assert (out / "manifest.json").exists()
     assert (out / "splits.json").exists()
+    assert (out / "stats.json").exists()
     assert json.loads((out / "splits.json").read_text()) == splits
     assert manifest["n_recipes"] == 3
     assert manifest["splits_sizes"] == {"train": 2, "val": 1, "test": 0, "ood": 0}
@@ -221,3 +269,166 @@ def test_process_dataset_parallel_matches_serial(tmp_path: Path) -> None:
             sdf_a = np.load(out_serial / dh / "graphs" / rid / f"sdf{k:03d}.npy")
             sdf_b = np.load(out_parallel / dh / "graphs" / rid / f"sdf{k:03d}.npy")
             assert np.array_equal(sdf_a, sdf_b)
+
+
+# --- stats.json (W3-04, FR-05: 정규화 통계는 train에서만) --------------------
+
+
+def _write_fake_graph(
+    d: Path, k: int, node: np.ndarray, edge: np.ndarray, sdf: np.ndarray
+) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        d / f"g{k:03d}.npz",
+        node=node,
+        edge_index=np.zeros((2, 0), np.int64),
+        edge=edge,
+        pos=node[:, :2],
+    )
+    np.save(d / f"sdf{k:03d}.npy", sdf)
+
+
+def test_compute_stats_matches_analytic_mean_std(tmp_path: Path) -> None:
+    """해석적으로 답을 아는 입력(설계서 §9): node 값 0과 2 -> 평균 1, 표준편차 1."""
+    root = tmp_path / "graphs"
+    node = np.array([[0.0] * 14, [2.0] * 14], dtype=np.float32)
+    edge = np.array([[0.0, 0.0, 0.0], [4.0, 4.0, 4.0]], dtype=np.float32)
+    sdf = np.array([[-1.0, 1.0], [-1.0, 1.0]], dtype=np.float32)  # 평균 0, 표준편차 1
+    _write_fake_graph(root / "r0000", 0, node, edge, sdf)
+
+    stats = compute_stats(root, ["r0000"])
+
+    assert np.allclose(stats["node_mean"], [1.0] * 14)
+    assert np.allclose(stats["node_std"], [1.0] * 14)
+    assert np.allclose(stats["edge_mean"], [2.0, 2.0, 2.0])
+    assert np.allclose(stats["edge_std"], [2.0, 2.0, 2.0])
+    assert stats["sdf_mean"] == pytest.approx(0.0)
+    assert stats["sdf_std"] == pytest.approx(1.0)
+    assert stats["n_nodes"] == 2
+    assert stats["n_edges"] == 2
+    assert stats["n_sdf_values"] == 4
+
+
+def test_compute_stats_accumulates_across_runs(tmp_path: Path) -> None:
+    root = tmp_path / "graphs"
+    node_a = np.zeros((1, 14), dtype=np.float32)
+    node_b = np.full((1, 14), 4.0, dtype=np.float32)
+    edge = np.zeros((1, 3), dtype=np.float32)
+    sdf = np.zeros((2, 2), dtype=np.float32)
+    _write_fake_graph(root / "r0000", 0, node_a, edge, sdf)
+    _write_fake_graph(root / "r0001", 0, node_b, edge, sdf)
+
+    stats = compute_stats(root, ["r0000", "r0001"])
+    assert np.allclose(stats["node_mean"], [2.0] * 14)  # (0+4)/2
+    assert stats["n_nodes"] == 2
+
+
+@pytest.mark.skipif(not FIXTURE_ROOT.exists(), reason="fixtures 없음")
+def test_process_dataset_stats_uses_train_split_only(tmp_path: Path) -> None:
+    splits_a = {"train": ["r0000"], "val": ["r0001"], "test": [], "ood": ["r0002"]}
+    out_a = tmp_path / "a"
+    manifest_a = process_dataset(FIXTURE_ROOT, splits_a, out_a, THETA_KEYS)
+    stats_a = json.loads((out_a / manifest_a["dataset_hash"] / "stats.json").read_text())
+
+    # 같은 run_id 집합이지만 train에 r0001을 더 포함 -> stats가 달라져야 한다
+    splits_b = {"train": ["r0000", "r0001"], "val": [], "test": [], "ood": ["r0002"]}
+    out_b = tmp_path / "b"
+    manifest_b = process_dataset(FIXTURE_ROOT, splits_b, out_b, THETA_KEYS)
+    stats_b = json.loads((out_b / manifest_b["dataset_hash"] / "stats.json").read_text())
+
+    assert stats_a["n_nodes"] != stats_b["n_nodes"]
+    assert stats_a != stats_b
+
+
+@pytest.mark.skipif(not FIXTURE_ROOT.exists(), reason="fixtures 없음")
+def test_process_dataset_stats_json_is_deterministic(tmp_path: Path) -> None:
+    """FR-05: 같은 입력(raw+splits) -> 같은 출력(dataset_hash, stats.json)."""
+    splits = {"train": ["r0000", "r0001"], "val": ["r0002"], "test": [], "ood": []}
+    m1 = process_dataset(FIXTURE_ROOT, splits, tmp_path / "a", THETA_KEYS)
+    m2 = process_dataset(FIXTURE_ROOT, splits, tmp_path / "b", THETA_KEYS)
+    assert m1["dataset_hash"] == m2["dataset_hash"]
+    s1 = (tmp_path / "a" / m1["dataset_hash"] / "stats.json").read_bytes()
+    s2 = (tmp_path / "b" / m2["dataset_hash"] / "stats.json").read_bytes()
+    assert s1 == s2
+
+
+# --- validate_run / validate_dataset (W3-05) --------------------------------
+
+
+def _write_fake_vtp(
+    path: Path, points: np.ndarray, lines: np.ndarray, mat: np.ndarray, normals: np.ndarray
+) -> None:
+    import pyvista as pv
+
+    conn = np.empty((len(lines), 3), dtype=np.int64)
+    conn[:, 0] = 2
+    conn[:, 1:] = lines
+    pts3 = np.zeros((len(points), 3), dtype=np.float64)
+    pts3[:, :2] = points
+    mesh = pv.PolyData(pts3, lines=conn.ravel())
+    mesh.cell_data["MaterialIds"] = mat
+    nrm3 = np.zeros((len(normals), 3), dtype=np.float64)
+    nrm3[:, :2] = normals
+    mesh.cell_data["Normals"] = nrm3
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mesh.save(str(path))
+
+
+@pytest.mark.skipif(not FIXTURE_ROOT.exists(), reason="fixtures 없음")
+def test_validate_run_passes_on_fixture() -> None:
+    r = validate_run(FIXTURE_ROOT / "r0001")
+    assert r["errors"] == []
+    assert r["n_snapshots"] == 4  # meta.json actual_k=3 -> 4
+    assert r["max_n_points"] > 0
+
+
+@pytest.mark.skipif(not FIXTURE_ROOT.exists(), reason="fixtures 없음")
+def test_validate_dataset_aggregates_fixture_runs() -> None:
+    report = validate_dataset(FIXTURE_ROOT, FIXTURE_RUNS)
+    assert report["n_runs"] == 3
+    assert report["n_bad"] == 0
+    assert report["max_n_points"] > 0
+
+
+def test_validate_run_detects_snapshot_count_mismatch(tmp_path: Path) -> None:
+    run = tmp_path / "bad_count"
+    run.mkdir(parents=True)
+    json.dump({"actual_k": 2, "params": {}}, open(run / "meta.json", "w"))
+    p = np.array([[0.0, 0.0], [1.0, 0.0]], dtype=np.float32)
+    lines = np.array([[0, 1]])
+    mat = np.array([10])
+    nv = np.array([[0.0, 1.0]])
+    _write_fake_vtp(run / "snapshots" / "t000.vtp", p, lines, mat, nv)  # actual_k+1=3 기대, 1개뿐
+
+    r = validate_run(run)
+    assert any("snapshot_count" in e for e in r["errors"]), r
+
+
+def test_validate_run_detects_nan_points(tmp_path: Path) -> None:
+    run = tmp_path / "bad_nan"
+    run.mkdir(parents=True)
+    json.dump({"actual_k": 0, "params": {}}, open(run / "meta.json", "w"))
+    p = np.array([[0.0, 0.0], [np.nan, 0.0]], dtype=np.float32)
+    lines = np.array([[0, 1]])
+    mat = np.array([10])
+    nv = np.array([[0.0, 1.0]])
+    _write_fake_vtp(run / "snapshots" / "t000.vtp", p, lines, mat, nv)
+
+    r = validate_run(run)
+    assert any("NaN" in e for e in r["errors"]), r
+
+
+def test_validate_run_detects_non_monotonic_depth(tmp_path: Path) -> None:
+    run = tmp_path / "bad_depth"
+    run.mkdir(parents=True)
+    json.dump({"actual_k": 1, "params": {}}, open(run / "meta.json", "w"))
+    lines = np.array([[0, 1]])
+    mat = np.array([10])
+    nv = np.array([[0.0, 1.0]])
+    p0 = np.array([[0.0, 0.0], [1.0, -5.0]], dtype=np.float32)  # depth=5
+    p1 = np.array([[0.0, 0.0], [1.0, -2.0]], dtype=np.float32)  # depth=2 (감소 -> 비정상)
+    _write_fake_vtp(run / "snapshots" / "t000.vtp", p0, lines, mat, nv)
+    _write_fake_vtp(run / "snapshots" / "t001.vtp", p1, lines, mat, nv)
+
+    r = validate_run(run)
+    assert any("monotonic" in e for e in r["errors"]), r

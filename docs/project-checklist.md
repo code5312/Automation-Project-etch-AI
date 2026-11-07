@@ -81,8 +81,15 @@
   실패 0건, 400/400 run `meta.json` 완전성 확인, 로컬·GitHub Release·HF 3중 백업).
   `sim_progress.py`는 Job 완료 후(Running 파드 0개) 상태를 처리하지 못하는 한계 발견 — 후속 과제로 기록.
 - [x] W3-03 ETL 완성: **부호 있는 SDF**(닫힌 폴리곤 안/밖), y 범위 자동 결정, 재료 매핑 적용 → FR-04 / 테스트: 직선·사각 트렌치에서 부호·값, 보잉 형상 안/밖, NaN 없음 — 완료(2026-11-03) 증거: `reports/evidence/W3-03_signed_sdf.md`(실제 경계선은 닫힌 폴리곤이 아닌 열린 체인임을 확인해 even-odd 규칙으로 구현, `PYTHONPATH=src python -m pytest tests/unit/test_etl.py -q` → 14 passed, 실제 fixture로 사후 확인해 NaN 없음·시간에 따라 solid 비율 감소 확인). y 범위는 `configs/sim/base.yaml`의 depth_max=50/`ood.extend`에서 `auto_yr()`로 자동 계산(옛 하드코딩 `(-30,12)`는 depth_max=50 기준으로 바닥이 잘리는 버그였음). 재료 매핑은 W2-04에서 이미 완료 확인. 부호 규약·y범위 공식은 ADR-0001 §6이 ADR 작성을 요구한 항목이라 `docs/adr/0003-signed-sdf-convention.md`로 동결(승인, 사용자 결정 2026-11-03).
-- [ ] W3-04 정규화 통계 `stats.json`(**train에서만**), `dataset_hash` 생성, 같은 입력=같은 출력 해시 일치 테스트 → FR-05
-- [ ] W3-05 데이터 검증 스크립트: 모든 run에 K+1 스냅샷, NaN 없음, 점 수>0, 깊이 단조 증가, 점 수 최대치 보고(그래프 크기 예산)
+- [x] W3-04 정규화 통계 `stats.json`(**train에서만**), `dataset_hash` 생성, 같은 입력=같은 출력 해시 일치 테스트 → FR-05
+  — 완료(2026-11-07) 증거: `reports/evidence/W3-04_stats_dataset_hash.md` (신규 테스트 4건
+  포함 `test_etl.py` 20 passed, 전체 스위트 64 passed). 실제 N=400(버그 수정분 포함)에
+  처음 `process_dataset` 실행 성공, `dataset_hash=4b8c0ce1bc98`, `stats.json`
+  node/edge/sdf 채널별 평균·표준편차 확인.
+- [x] W3-05 데이터 검증 스크립트: 모든 run에 K+1 스냅샷, NaN 없음, 점 수>0, 깊이 단조 증가, 점 수 최대치 보고(그래프 크기 예산)
+  — 완료(2026-11-07) 증거: `reports/evidence/W3-05_data_validation.md` (신규 테스트 5건
+  포함 `test_etl.py` 25 passed, 전체 스위트 69 passed). 실제 N=400 전체 오류 0건,
+  그래프 크기 예산(점 수 최대치)=663. `scripts/validate_data.py`.
 - [ ] W3-06 골든셋 확정: `golden/raw/` 10개 복사, `golden.json`, `golden_hash`, 변경 시 테스트 실패
 - [ ] W3-07 베이스라인 2종: (a) 변위 0, (b) 레시피→깊이 MLP 후 직선 외삽, val 지표 기록
 - [ ] W3-08 데이터 카드 초안(생성 방법·범위·알려진 한계·시뮬레이터 버전)
@@ -96,6 +103,22 @@
   교체(`!=` short-circuit 비교의 타이밍 공격 이론적 가능성 제거) — 완료(2026-11-03)
   증거: `reports/evidence/W3-10_api_key_timing.md`(틀린 키 401·맞는 키 200 재확인,
   Windows 소켓 환경 이슈는 이번 변경과 무관한 기존 이슈로 별도 기록).
+- [x] W3-11 (계획 외 추가, 사용자 제보로 발견) SDF 내부 재료 경계 버그 수정:
+  `addInterfaces=True`로 내보낸 메시의 solid-solid 내부 경계(마스크가 덮은 Si 상단)가
+  외곽 경계와 MaterialIds로 구분되지 않아 짝수-홀수 교차 판정이 깨지는 버그를
+  `shapely` polygonize+union 기반 필터(`_filter_internal_interfaces`)로 수정 —
+  완료(2026-11-06) 증거: `reports/evidence/W3-11_sdf_internal_interface_bugfix.md`
+  (기존 15건+신규 회귀 테스트 1건 = 16 passed, 전체 스위트 59 passed, 실제 fixture
+  수정 전/후 비교로 버그 재현·해결 확인). `data/processed/`가 비어있어 실 데이터
+  영향 없음 확인. 새 의존성 `shapely==2.2.0` 추가(사용자 확인 후).
+- [x] W3-12 (계획 외 추가, 사용자 제보로 발견) OOD `ion_mean_energy` 음수 버그 수정:
+  `make_ood_recipes`의 linear-scale 하한 확장(`lo - span`)이 `ion_mean_energy`에서
+  음수 구간을 포함해(`lo=50 < span=75`) 물리적으로 불가능한 음수 에너지를 샘플링하던
+  버그를 `max(lo-span, 1e-6)` 클램프로 수정 — 완료(2026-11-07) 증거:
+  `reports/evidence/W3-12_ood_negative_energy_bugfix.md` (신규 회귀 테스트 1건 포함
+  8 passed). 영향받은 ood 12건(`ood0004,07,08,09,10,12,13,14,15,17,18,19`) 재생성·
+  로컬 백업 완료. GitHub Release·Hugging Face는 아직 수정 전 버전 — 재업로드는
+  후속 단계. +100건 생성 계획은 split 비율 변경(DOC- 필요)이라 보류(사용자 확인).
 
 **게이트 G3**: train/val/test/ood가 로드되고, 데이터 검증이 통과하며, 베이스라인 지표가 있다. 생성이 덜 끝났어도 현재 완료분으로 `v1`을 고정하고 진행한다.
 

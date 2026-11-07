@@ -11,7 +11,10 @@ from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import pyvista as pv
+import shapely
 from scipy.spatial import cKDTree
+from shapely.geometry import LineString
+from shapely.ops import polygonize, unary_union
 
 SnapshotArrays = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
 
@@ -130,6 +133,52 @@ def _dist_to_segments(x: np.ndarray, y: np.ndarray, p: np.ndarray, lines: np.nda
     return dist
 
 
+def _filter_internal_interfaces(p: np.ndarray, lines: np.ndarray, y_below: float) -> np.ndarray:
+    """addInterfaces=True로 내보낸 선분 중, 양쪽이 모두 solid인 내부 경계(예: 마스크가
+    덮어서 아직 vacuum에 노출되지 않은 Si 상단, mask/Si 접촉면)를 제거하고 실제
+    solid-vacuum 외곽 경계만 남긴다.
+
+    버그 발견 경위: MaterialIds만으로는 내부 경계와 외곽 경계를 구분할 수 없음을
+    실측으로 확인함(마스크/Si 내부 접촉면과, 트렌치 바닥에서 Si가 실제로 vacuum과
+    맞닿는 외곽 경계가 둘 다 MaterialIds=10으로 동일). 내부 경계를 그대로 두면
+    `_inside_solid`의 짝수-홀수 교차 판정이 깨져 마스크 내부가 vacuum으로 잘못
+    나온다(실측: 마스크 몸통 안쪽 점이 inside_solid=False, sdf>0으로 나왔음).
+
+    해결: 열린 체인(도메인 좌우 경계에서 끝나는 미완성 경계, ADR-0003)을 y_below
+    (항상 solid로 간주하는 바닥)까지 내려 임시로 닫은 뒤 polygonize+union하면,
+    서로 다른 두 폴리곤이 공유하는 내부 경계는 union 결과의 경계(boundary)에서
+    사라지고 내부로 들어간다 — 그 경계 위에 남아있는 원래 선분만 돌려준다.
+    (임시로 덧붙인 닫는 선분 자체는 반환하지 않음 — `_dist_to_segments`의 거리
+    계산을 오염시키지 않기 위해, 원래 있던 선분만 걸러서 넘겨야 한다.)"""
+    deg: dict[int, int] = {}
+    for a, b in lines:
+        deg[int(a)] = deg.get(int(a), 0) + 1
+        deg[int(b)] = deg.get(int(b), 0) + 1
+    ends = [i for i, d in deg.items() if d == 1]
+
+    segs = [LineString([p[a], p[b]]) for a, b in lines]
+    closing: list[LineString] = [LineString([p[i], (float(p[i, 0]), y_below)]) for i in ends]
+    uniq_x = sorted({round(float(p[i, 0]), 6) for i in ends})
+    for i in range(len(uniq_x) - 1):
+        closing.append(LineString([(uniq_x[i], y_below), (uniq_x[i + 1], y_below)]))
+
+    # polygonize는 선분들이 교차점에서 깨끗이 노드되어 있어야 한다. 열린 끝점이 여러
+    # 개(도메인 좌우 경계에 Si쪽·마스크쪽 끝이 따로 있는 경우)면 같은 x로 내려가는
+    # 수직 닫는 선분들이 서로 겹치는(collinear overlap) 구간이 생기는데, 이걸 노드
+    # 처리 안 하면 polygonize가 다각형을 하나도 못 찾는다(실측으로 확인) — unary_union로
+    # 먼저 노드시킨다.
+    noded = unary_union(segs + closing)
+    polys = list(polygonize(noded))
+    if not polys:
+        return lines  # 닫힌 영역을 못 만드는 이상 케이스 — 안전하게 원래 선분 그대로 둔다
+
+    boundary = unary_union(polys).boundary
+    mids = (p[lines[:, 0]] + p[lines[:, 1]]) / 2.0
+    mid_pts = shapely.points(mids[:, 0], mids[:, 1])
+    on_boundary = shapely.dwithin(boundary, mid_pts, 1e-6)
+    return lines[on_boundary]
+
+
 def signed_dist_field(
     p: np.ndarray,
     lines: np.ndarray,
@@ -144,8 +193,10 @@ def signed_dist_field(
         yr = auto_yr()
     gx, gy = np.meshgrid(np.linspace(*xr, nx), np.linspace(*yr, ny))
     x, y = gx.ravel(), gy.ravel()
-    dist = _dist_to_segments(x, y, p, lines)
-    inside = _inside_solid(x, y, p, lines, y_below=yr[0] - 1.0)
+    y_below = yr[0] - 1.0
+    boundary_lines = _filter_internal_interfaces(p, lines, y_below)
+    dist = _dist_to_segments(x, y, p, boundary_lines)
+    inside = _inside_solid(x, y, p, boundary_lines, y_below=y_below)
     sign = np.where(inside, -1.0, 1.0)
     return (sign * dist).reshape(ny, nx).astype(np.float32)
 
@@ -186,6 +237,58 @@ def compute_dataset_hash(run_ids: list[str], raw_dir: str | pathlib.Path) -> str
     return hashlib.sha1("".join(parts).encode()).hexdigest()[:12]
 
 
+def compute_stats(graphs_root: str | pathlib.Path, run_ids: list[str]) -> dict:
+    """run_ids(설계서 FR-05: train에서만 호출)의 그래프 npz(node/edge)·SDF npy를 모아
+    정규화에 쓸 채널별 평균/표준편차를 계산한다. 분산은 E[x^2]-E[x]^2로 1-pass 누적
+    (run_id 전체를 메모리에 올리지 않기 위함), 부동소수 오차로 음수가 나올 수 있어
+    `np.maximum(var, 0)`로 클램프."""
+    root = pathlib.Path(graphs_root)
+    node_sum = node_sq = edge_sum = edge_sq = None
+    node_n = edge_n = 0
+    sdf_sum = sdf_sq = 0.0
+    sdf_n = 0
+    for rid in sorted(run_ids):
+        d = root / rid
+        for f in sorted(d.glob("g*.npz")):
+            z = np.load(f)
+            node = z["node"].astype(np.float64)
+            edge = z["edge"].astype(np.float64)
+            if node_sum is None:
+                node_sum, node_sq = node.sum(0), (node**2).sum(0)
+                edge_sum, edge_sq = edge.sum(0), (edge**2).sum(0)
+            else:
+                node_sum += node.sum(0)
+                node_sq += (node**2).sum(0)
+                edge_sum += edge.sum(0)
+                edge_sq += (edge**2).sum(0)
+            node_n += len(node)
+            edge_n += len(edge)
+        for f in sorted(d.glob("sdf*.npy")):
+            s = np.load(f).astype(np.float64)
+            sdf_sum += float(s.sum())
+            sdf_sq += float((s**2).sum())
+            sdf_n += s.size
+
+    node_mean = node_sum / node_n
+    node_std = np.sqrt(np.maximum(node_sq / node_n - node_mean**2, 0.0))
+    edge_mean = edge_sum / edge_n
+    edge_std = np.sqrt(np.maximum(edge_sq / edge_n - edge_mean**2, 0.0))
+    sdf_mean = sdf_sum / sdf_n
+    sdf_std = float(np.sqrt(max(sdf_sq / sdf_n - sdf_mean**2, 0.0)))
+
+    return {
+        "node_mean": node_mean.tolist(),
+        "node_std": node_std.tolist(),
+        "edge_mean": edge_mean.tolist(),
+        "edge_std": edge_std.tolist(),
+        "sdf_mean": float(sdf_mean),
+        "sdf_std": sdf_std,
+        "n_nodes": int(node_n),
+        "n_edges": int(edge_n),
+        "n_sdf_values": int(sdf_n),
+    }
+
+
 def process_dataset(
     raw_dir: str | pathlib.Path,
     splits: dict[str, list[str]],
@@ -194,7 +297,8 @@ def process_dataset(
     max_workers: int | None = 1,
 ) -> dict:
     """splits(train/val/test/ood -> run_id 리스트)를 raw_dir에서 읽어
-    out_root/<dataset_hash>/graphs/<run_id>/에 쓰고 manifest.json·splits.json을 남긴다.
+    out_root/<dataset_hash>/graphs/<run_id>/에 쓰고 manifest.json·splits.json·stats.json을
+    남긴다. stats.json은 FR-05(설계서 C2)대로 train split에서만 계산한다.
 
     run_id마다 출력 경로가 독립적이라(공유 상태 없음) max_workers로 run_id 단위
     ProcessPoolExecutor 병렬화를 켤 수 있다. 기본값 1(직렬)은 기존 동작과 동일 —
@@ -222,6 +326,8 @@ def process_dataset(
                 fut.result()  # 워커 예외를 여기서 바로 전파(조용히 묻히지 않도록)
 
     json.dump(splits, open(out / "splits.json", "w"), indent=1)
+    stats = compute_stats(out / "graphs", splits["train"])  # FR-05: train에서만
+    json.dump(stats, open(out / "stats.json", "w"), indent=1)
     manifest = {
         "dataset_hash": dataset_hash,
         "theta_keys": theta_keys,
@@ -230,6 +336,59 @@ def process_dataset(
     }
     json.dump(manifest, open(out / "manifest.json", "w"), indent=1)
     return manifest
+
+
+def validate_run(run_dir: str | pathlib.Path) -> dict:
+    """W3-05: raw run 1건 검증. 예외를 던지지 않고 errors 리스트로 모아 반환한다
+    (배치 검증에서 한 건이 전체를 중단시키지 않도록).
+    - 스냅샷 개수 == actual_k+1(meta.json, 조기종료면 K보다 작을 수 있음)
+    - 점 수>0, 점·법선에 NaN/Inf 없음(`np.isfinite`)
+    - 식각 깊이가 시간에 따라 감소하지 않음(물리 타당성, 설계서 §9)
+    - 점 수 최대치(그래프 크기 예산, 설계서 §4.2 위험)도 함께 보고"""
+    run = pathlib.Path(run_dir)
+    meta = json.load(open(run / "meta.json"))
+    expected = meta["actual_k"] + 1
+    snaps = sorted((run / "snapshots").glob("t*.vtp"))
+    errors = []
+    if len(snaps) != expected:
+        errors.append(f"snapshot_count={len(snaps)} expected={expected}(actual_k+1)")
+
+    depths = []
+    max_n_points = 0
+    for s in snaps:
+        p, _lines, _mid, nv = load_snapshot(s)
+        if len(p) == 0:
+            errors.append(f"{s.name}: n_points=0")
+        if not (np.isfinite(p).all() and np.isfinite(nv).all()):
+            errors.append(f"{s.name}: NaN/Inf in points or normals")
+        max_n_points = max(max_n_points, len(p))
+        depths.append(metrics(p)["depth"])
+
+    if depths and not all(b >= a - 1e-6 for a, b in zip(depths, depths[1:])):
+        errors.append(f"depth not monotonically nondecreasing: {depths}")
+
+    return {
+        "run_id": run.name,
+        "errors": errors,
+        "n_snapshots": len(snaps),
+        "max_n_points": max_n_points,
+    }
+
+
+def validate_dataset(raw_dir: str | pathlib.Path, run_ids: list[str] | None = None) -> dict:
+    """raw_dir 아래 run_ids(생략 시 meta.json이 있는 전체)를 validate_run으로 검사해
+    집계한다. 점 수 최대치(그래프 크기 예산)는 전체 run 중 최댓값."""
+    raw = pathlib.Path(raw_dir)
+    if run_ids is None:
+        run_ids = sorted(d.name for d in raw.iterdir() if d.is_dir() and (d / "meta.json").exists())
+    results = [validate_run(raw / rid) for rid in run_ids]
+    bad = [r for r in results if r["errors"]]
+    return {
+        "n_runs": len(results),
+        "n_bad": len(bad),
+        "max_n_points": max((r["max_n_points"] for r in results), default=0),
+        "bad_runs": bad,
+    }
 
 
 THETA_KEYS = [

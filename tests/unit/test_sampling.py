@@ -48,3 +48,15 @@ def test_ood_recipes_are_outside_space_bounds() -> None:
     for r in ood:
         outside = [not (lo <= r["params"][name] <= hi) for name, lo, hi, _ in SPACE]
         assert any(outside), r
+
+
+def test_ood_linear_params_never_negative() -> None:
+    """W3-12 회귀: linear-scale 파라미터(예: ion_mean_energy)의 OOD 하한 확장이
+    lo보다 더 내려가(lo - span < 0) 음수를 뽑던 버그. 물리량은 음수가 될 수 없다."""
+    for name, lo, hi, log in SPACE:
+        if log or lo <= 0:
+            continue
+        for seed in range(20):
+            ood = make_ood_recipes(50, seed=seed)
+            for r in ood:
+                assert r["params"][name] > 0, (name, r)

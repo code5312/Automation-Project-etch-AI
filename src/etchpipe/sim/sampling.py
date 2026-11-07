@@ -54,7 +54,10 @@ def make_ood_recipes(n_total: int, seed: int = 0, extend: float = 1.5) -> list[d
                 p[name] = float(np.exp(rng.uniform(np.log(ext_lo), np.log(ext_hi))))
             else:
                 span = (hi - lo) * (extend - 1)
-                ext_lo, ext_hi = (lo - span, lo) if below else (hi, hi + span)
+                # lo - span이 음수가 될 수 있다(예: ion_mean_energy lo=50, span=75 ->
+                # -25). 물리량(에너지 등)은 음수가 될 수 없으므로 0 바로 위로 클램프한다.
+                # 2026-11-07 W3-12, reports/evidence/W3-12_ood_negative_energy_bugfix.md.
+                ext_lo, ext_hi = (max(lo - span, 1e-6), lo) if below else (hi, hi + span)
                 p[name] = float(rng.uniform(ext_lo, ext_hi))
         out.append({"run_id": f"ood{i:04d}", "params": p})
     return out
