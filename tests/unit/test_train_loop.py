@@ -5,13 +5,21 @@ tests/fixtures/raw(r0000~r0002, K=3, 실제 ViennaPS 결과)를 etl_run으로 �
 연결·과적합 확인은 W4-03.
 """
 
+import json
 import pathlib
 
 import torch
 from torch import nn
 
 from etchpipe.etl.etl import THETA_KEYS, etl_run
-from etchpipe.train.loop import GraphDisplacementModel, iter_transition_pairs, train_one_epoch
+from etchpipe.train.loop import (
+    GraphDisplacementModel,
+    iter_transition_pairs,
+    load_norm_stats,
+    normalize_edge,
+    normalize_node,
+    train_one_epoch,
+)
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "raw"
 RUN_IDS = ["r0000", "r0001", "r0002"]
@@ -77,4 +85,53 @@ def test_train_one_epoch_updates_model_parameters(tmp_path: pathlib.Path) -> Non
 
     train_one_epoch(model, opt, graphs_root, RUN_IDS)
 
+    assert not torch.equal(before, model.lin.weight)
+
+
+def _write_stats(path: pathlib.Path) -> pathlib.Path:
+    stats = {
+        "node_mean": [0.0] * 14,
+        "node_std": [1.0, 2.0] + [1.0] * 12,
+        "edge_mean": [0.0, 0.0, 0.3],
+        "edge_std": [0.2, 0.2, 0.1],
+    }
+    stats_path = path / "stats.json"
+    stats_path.write_text(json.dumps(stats), encoding="utf-8")
+    return stats_path
+
+
+def test_load_norm_stats_reads_json(tmp_path: pathlib.Path) -> None:
+    stats_path = _write_stats(tmp_path)
+    norm = load_norm_stats(stats_path)
+    assert norm.node_mean.shape == (14,)
+    assert norm.node_std.shape == (14,)
+    assert norm.edge_mean.shape == (3,)
+    assert norm.edge_std.shape == (3,)
+    assert float(norm.node_std[1]) == 2.0
+
+
+def test_normalize_node_and_edge_apply_mean_std(tmp_path: pathlib.Path) -> None:
+    norm = load_norm_stats(_write_stats(tmp_path))
+    node = torch.zeros((3, 14))
+    node[:, 1] = 4.0
+    edge = torch.tensor([[0.0, 0.0, 0.3]])
+
+    node_out = normalize_node(node, norm)
+    edge_out = normalize_edge(edge, norm)
+
+    assert torch.allclose(node_out[:, 1], torch.full((3,), 2.0))  # (4-0)/2
+    assert torch.allclose(edge_out, torch.zeros_like(edge_out))  # (0.3-0.3)/0.1 등
+
+
+def test_train_one_epoch_with_norm_runs_and_updates(tmp_path: pathlib.Path) -> None:
+    graphs_root = _build_graphs(tmp_path)
+    norm = load_norm_stats(_write_stats(tmp_path))
+    torch.manual_seed(0)
+    model: GraphDisplacementModel = ToyNodeMLP()
+    before = model.lin.weight.clone()
+    opt = torch.optim.Adam(model.parameters(), lr=0.01)
+
+    loss = train_one_epoch(model, opt, graphs_root, RUN_IDS, norm=norm)
+
+    assert loss >= 0.0
     assert not torch.equal(before, model.lin.weight)

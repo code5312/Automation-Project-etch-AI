@@ -59,3 +59,40 @@ All checks passed!
   (train 컨테이너 전용) 이번 항목에서는 확인 불가 — W4-03에서 컨테이너 안에서 진행.
 - 배치 처리: 쌍마다 점 개수가 달라 PyG 식 블록-대각 배치를 쓰려면 추가 설계가 필요 —
   지금은 쌍 1개씩 개별 역전파(스텝당 느릴 수 있음, 실측은 W4-04 본 학습에서).
+
+## 추가: 입력 정규화 지원 (2026-11-09)
+
+GPU 팀원이 전달한 MGN 초안 체크포인트(`runs/mgn_draft/ckpt_mgn.pt`)를 분석하는 과정에서
+(아래 "W4-03 이관" 참고) 그 체크포인트가 `(node-mu_n)/sd_n`, `(edge-mu_e)/sd_e` 정규화된
+입력으로 학습됐음을 확인 — 반면 당시 `train_one_epoch`은 정규화 없이 raw 특징을 그대로
+모델에 넣고 있었다. 채널별 스케일 차이가 큼(예: theta 한 채널 평균 4944/표준편차 3230,
+나머지는 O(1)) — 이것이 2026-11-09 CPU 과적합 프로브에서 손실이 0.75 선에 plateau된
+원인일 가능성이 있다고 판단.
+
+`src/etchpipe/train/loop.py`에 `NodeEdgeNorm`(dataclass), `load_norm_stats(stats_path)`,
+`normalize_node`/`normalize_edge` 추가. `train_one_epoch(..., norm=None)` — 기본값
+`None`이면 기존과 동일(하위 호환, 기존 테스트 변경 없이 통과). `norm`을 주면 모델 호출
+전 node/edge만 정규화하고 출력 변위는 그대로 둠(체크포인트에 별도 출력 통계 없음).
+
+정규화 소스는 `data/processed/<dataset_hash>/stats.json`(W3-04)을 쓴다 — 실제 대조
+결과 팀원 체크포인트의 `mu_n/sd_n/mu_e/sd_e`와 거의 일치(독립적으로 같은 데이터에서
+같은 값을 다시 계산한 것으로 보임), 교차 검증됨.
+
+테스트: `tests/unit/test_train_loop.py`에 3건 추가(`test_load_norm_stats_reads_json`,
+`test_normalize_node_and_edge_apply_mean_std`, `test_train_one_epoch_with_norm_runs_and_updates`).
+
+```
+PYTHONPATH=src python -m pytest tests/unit/test_train_loop.py -v  → 7 passed
+PYTHONPATH=src python -m pytest tests/unit -q --ignore=tests/unit/test_serve.py
+  → 87 passed, 3 failed (test_run_train.py git_sha 관련 3건 — etch-train:0.1 이미지에
+    git 미설치라 컨테이너 안에서만 실패, 오늘 변경과 무관한 기존 환경 한계 [미확인:
+    Dockerfile.train에 git 추가 여부])
+python -m ruff check src/etchpipe/train/ tests/unit/test_train_loop.py → All checks passed
+```
+
+## W4-03 이관 메모
+
+실제 MeshGraphNet 연결까지는 이번 항목에서 끝냈고(`src/etchpipe/models/meshgraphnet.py`,
+`docker/Dockerfile.train`), 소부분집합 과적합 테스트(원래 W4-03 범위)는 CPU 자원
+부족(epoch당 150~290초)으로 GPU 가용 팀원에게 이관함 — 자세한 내용은
+`docs/project-checklist.md` W4-03 항목 메모 참고.

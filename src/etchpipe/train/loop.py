@@ -9,9 +9,20 @@
   node: (N,14) float32, edge_index: (2,2E) int64, edge: (2E,3) float32, 반환: (N,2) float32.
 실제 MeshGraphNet(nvidia-physicsnemo) 연결 시 이 시그니처가 맞지 않으면 W4-03에서 얇은
 래퍼로 맞춘다[미확인: physicsnemo MeshGraphNet.forward의 정확한 입력 형식].
+
+입력 정규화(`NodeEdgeNorm`): MeshGraphNet에 넣기 전 node/edge 특징을
+`(x-mean)/std`로 정규화하는 게 표준(채널별 스케일 차이가 커서 — 예: theta 채널 하나는
+평균 수천 단위, 나머지는 O(1) — 정규화 없이 학습하면 손실이 잘 안 떨어짐, 2026-11-09
+CPU 과적합 프로브에서 실측). `data/processed/<dataset_hash>/stats.json`(W3-04, train
+기준)을 그대로 쓴다 — 외부에서 받은 MGN 초안 체크포인트(`runs/mgn_draft/ckpt_mgn.pt`)가
+독자적으로 계산한 `mu_n/sd_n/mu_e/sd_e`도 이 stats.json과 거의 일치함을 확인함(같은 데이터,
+같은 채널 순서라는 교차 검증). `norm=None`(기본값)이면 정규화 없이 기존과 동일하게 동작
+(하위 호환).
 """
 
+import json
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -25,6 +36,33 @@ class GraphDisplacementModel(Protocol):
     def __call__(
         self, node: torch.Tensor, edge_index: torch.Tensor, edge: torch.Tensor
     ) -> torch.Tensor: ...
+
+
+@dataclass
+class NodeEdgeNorm:
+    node_mean: torch.Tensor
+    node_std: torch.Tensor
+    edge_mean: torch.Tensor
+    edge_std: torch.Tensor
+
+
+def load_norm_stats(stats_path) -> NodeEdgeNorm:
+    """`stats.json`(W3-04, `process_dataset` 출력)에서 node/edge 정규화 통계를 읽는다."""
+    stats = json.loads(Path(stats_path).read_text(encoding="utf-8"))
+    return NodeEdgeNorm(
+        node_mean=torch.tensor(stats["node_mean"], dtype=torch.float32),
+        node_std=torch.tensor(stats["node_std"], dtype=torch.float32),
+        edge_mean=torch.tensor(stats["edge_mean"], dtype=torch.float32),
+        edge_std=torch.tensor(stats["edge_std"], dtype=torch.float32),
+    )
+
+
+def normalize_node(node: torch.Tensor, norm: NodeEdgeNorm) -> torch.Tensor:
+    return (node - norm.node_mean) / norm.node_std
+
+
+def normalize_edge(edge: torch.Tensor, norm: NodeEdgeNorm) -> torch.Tensor:
+    return (edge - norm.edge_mean) / norm.edge_std
 
 
 def _load_graph(path) -> dict[str, torch.Tensor]:
@@ -61,13 +99,17 @@ def train_one_epoch(
     optimizer: torch.optim.Optimizer,
     graphs_root,
     run_ids: list[str],
+    norm: NodeEdgeNorm | None = None,
 ) -> float:
     """전이쌍 전체를 한 번씩 돌며(팀포싱) 학습한다. 쌍마다 개별 역전파(점 개수가 쌍마다
-    달라 배치로 묶기 어려움). 평균 손실을 반환."""
+    달라 배치로 묶기 어려움). `norm`을 주면 모델에 넣기 전 node/edge를 정규화(출력 변위는
+    정규화하지 않음 — 체크포인트에 별도 출력 통계가 없어 raw 그대로 사용). 평균 손실을 반환."""
     total, n = 0.0, 0
     for pair in iter_transition_pairs(graphs_root, run_ids):
         optimizer.zero_grad()
-        disp = model(pair["node"], pair["edge_index"], pair["edge"])
+        node_in = normalize_node(pair["node"], norm) if norm is not None else pair["node"]
+        edge_in = normalize_edge(pair["edge"], norm) if norm is not None else pair["edge"]
+        disp = model(node_in, pair["edge_index"], edge_in)
         pred_pos = pair["pos"] + disp
         loss = chamfer_loss(pred_pos, pair["true_pos_next"])
         loss.backward()
