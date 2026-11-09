@@ -22,6 +22,9 @@ reports/evidence/*.raw.log
 *.pt
 *.pth
 *.ckpt
+# nvidia-physicsnemo 네이티브 저장 포맷(Module.save()) — FNO 초안(W6-11) 도입으로 추가
+# (2026-11-09, ckpt_mgn.pt·FNO .mdlus 초안 파일을 runs/에 두기로 하면서 발견: 기존 규칙에 없었음)
+*.mdlus
 
 # Python
 __pycache__/
