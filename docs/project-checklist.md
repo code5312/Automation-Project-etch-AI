@@ -180,7 +180,21 @@ node_block이 번갈아 쌓임)라 레이어 12개는 **`processor_size=6`**이 
   변환 완료).
 - [ ] W4-04 본 학습(모델 `processor_size=6, hidden=64` — GPU 팀원 초안 체크포인트와
   `load_state_dict`로 검증[확인], 한 번 12로 잘못 바꿨다가 정정함, 2026-11-09), 에폭당
-  시간 기록, 예산 3시간 이내 [제안] — **[GPU 팀원]**
+  시간 기록, 예산 3시간 이내 [제안] — **[CPU/매핑] 배선 완료(2026-11-10)**:
+  `src/etchpipe/train/train_main.py`(`run_training`, `build_model`, CLI)로 config→모델→
+  옵티마이저→에폭 루프→체크포인트·`metrics.json` 저장→시간 예산 중단을 연결. `train_one_epoch`
+  에 `device` 인자 추가(cpu/cuda 공용, cpu는 무연산이라 하위 호환) — 증거:
+  `reports/evidence/W4-04_train_main_wiring.md`(신규 테스트 2건, 토이 모델+실제 fixture로
+  배선만 검증, `tests/unit` 97 passed). **실측(2026-11-09~10) CPU로는 예산 초과**: train
+  300개 전체는 전이쌍 4,841개/에폭, 5-recipe 프로브(71쌍, 150~290초/에폭) 환산하면
+  에폭 1번에 약 2.8~5.5시간 — 3시간 예산을 1에폭도 못 채움. **[GPU 팀원]** 아래 "GPU 실행
+  방법" 참고해 실제 실행·체크포인트 생성.
+
+  **GPU 실행 방법**: `PYTHONPATH=src python -m etchpipe.train.train_main configs/model/mgn_v1.yaml --device cuda --time-budget-hours 3`
+  데이터: `data/processed/4b8c0ce1bc98/{graphs/,stats.json}`(W3-04), `data/splits.json`(train
+  300개). 출력: `runs/<run_id>/{config.yaml, git_sha, packages.json, metrics.json,
+  ckpt_last.pt}`. `configs/model/mgn_v1.yaml`의 `train.lr=0.0001`/`epochs=100`은 [미확인:
+  재검토 전 기본값] — GPU 체감 속도 보고 조정 가능(사용자 확인 후).
 - [ ] W4-05 롤아웃 v1(연결 유지, 법선·엣지 재계산, 재료 이전 값 유지): K스텝 예측, val 오차 기록
   — **[CPU/매핑] 완료(2026-11-09)**: `src/etchpipe/train/rollout.py`(`rollout`,
   `rollout_val_error`, `recompute_edge_features`, `recompute_normals`) 구현, 토이 모델로

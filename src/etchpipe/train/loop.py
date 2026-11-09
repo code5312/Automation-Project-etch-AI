@@ -101,18 +101,37 @@ def train_one_epoch(
     graphs_root,
     run_ids: list[str],
     norm: NodeEdgeNorm | None = None,
+    device: str = "cpu",
 ) -> float:
     """전이쌍 전체를 한 번씩 돌며(팀포싱) 학습한다. 쌍마다 개별 역전파(점 개수가 쌍마다
     달라 배치로 묶기 어려움). `norm`을 주면 모델에 넣기 전 node/edge를 정규화(출력 변위는
-    정규화하지 않음 — 체크포인트에 별도 출력 통계가 없어 raw 그대로 사용). 평균 손실을 반환."""
+    정규화하지 않음 — 체크포인트에 별도 출력 통계가 없어 raw 그대로 사용). `device`("cpu"/
+    "cuda")로 각 텐서를 옮긴다 — 모델을 해당 device로 옮기는 건 호출자 책임(W4-04,
+    `train_main.run_training`이 루프 시작 전 한 번 `model.to(device)`). "cpu"는 기존과
+    동일(무연산 `.to`)해 하위 호환. 평균 손실을 반환."""
     total, n = 0.0, 0
+    norm_dev = (
+        NodeEdgeNorm(
+            node_mean=norm.node_mean.to(device),
+            node_std=norm.node_std.to(device),
+            edge_mean=norm.edge_mean.to(device),
+            edge_std=norm.edge_std.to(device),
+        )
+        if norm is not None
+        else None
+    )
     for pair in iter_transition_pairs(graphs_root, run_ids):
         optimizer.zero_grad()
-        node_in = normalize_node(pair["node"], norm) if norm is not None else pair["node"]
-        edge_in = normalize_edge(pair["edge"], norm) if norm is not None else pair["edge"]
-        disp = model(node_in, pair["edge_index"], edge_in)
-        pred_pos = pair["pos"] + disp
-        loss = chamfer_loss(pred_pos, pair["true_pos_next"])
+        node = pair["node"].to(device)
+        edge_index = pair["edge_index"].to(device)
+        edge = pair["edge"].to(device)
+        pos = pair["pos"].to(device)
+        true_pos_next = pair["true_pos_next"].to(device)
+        node_in = normalize_node(node, norm_dev) if norm_dev is not None else node
+        edge_in = normalize_edge(edge, norm_dev) if norm_dev is not None else edge
+        disp = model(node_in, edge_index, edge_in)
+        pred_pos = pos + disp
+        loss = chamfer_loss(pred_pos, true_pos_next)
         loss.backward()
         optimizer.step()
         total += float(loss.detach())
