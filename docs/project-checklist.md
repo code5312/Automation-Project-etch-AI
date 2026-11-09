@@ -138,7 +138,11 @@
 
 ## 4주차: 모델 A 학습과 롤아웃 판정
 
-- [ ] W4-01 학습 스크립트: YAML 설정 한 파일, 시드·설정·코드 SHA·패키지 버전을 `runs/`에 저장 → FR-06
+- [x] W4-01 학습 스크립트: YAML 설정 한 파일, 시드·설정·코드 SHA·패키지 버전을 `runs/`에 저장 → FR-06
+  — 완료(2026-11-09) 증거: `reports/evidence/W4-01_train_script_skeleton.md`.
+  `src/etchpipe/train/run_train.py`(`init_run`), `configs/model/mgn_v1.yaml`. 새 의존성
+  `PyYAML==6.0.3` 추가(사용자 확인 후). 신규 테스트 5건 포함 `tests/unit` 86 passed.
+  실제 설정 파일로 실행해 `runs/<run_id>/{config.yaml, git_sha, packages.json}` 생성 확인.
 - [ ] W4-02 손실 Chamfer 구현·테스트, 학습 루프(전이쌍, 팀포싱)
 - [ ] W4-03 **소부분집합 과적합 테스트**(레시피 5개에서 손실이 0에 가깝게)
 - [ ] W4-04 본 학습(축소 모델 `processor_size=6, hidden=64`), 에폭당 시간 기록, 예산 3시간 이내 [제안]

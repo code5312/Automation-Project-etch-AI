@@ -1,0 +1,23 @@
+# W4-01: 모델 A(MeshGraphNet) 학습 설정 1차 초안 [제안]. 값은 설계서 §3 C3
+# (processor_size=8~15, hidden_dim_processor=64~128)의 범위 안에서 W4-04가 쓸 축소 모델
+# (processor_size=6, hidden=64, 체크리스트 W4-04)과 맞춘 시작점 — 실제 학습 루프(W4-02~04)
+# 작성 시 조정될 수 있다.
+
+seed: 20261027
+
+data:
+  dataset_hash: 4b8c0ce1bc98  # reports/evidence/W3-04_stats_dataset_hash.md
+
+model:
+  name: meshgraphnet
+  meshgraphnet:
+    input_dim_nodes: 14
+    input_dim_edges: 3
+    output_dim: 2
+    processor_size: 6     # W4-04 축소 모델 기준 [제안]
+    hidden_dim_processor: 64
+
+train:
+  loss: chamfer
+  epochs: 100   # [제안: 설계서 §5 예시값, 1주차 시간 예산(3시간 이내, W4-04)에서 재검토]
+  lr: 0.0001    # [미확인: seed 코드/PhysicsNeMo 예제 기본값 확인 전]
