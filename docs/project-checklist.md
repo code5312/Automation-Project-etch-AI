@@ -143,7 +143,12 @@
   `src/etchpipe/train/run_train.py`(`init_run`), `configs/model/mgn_v1.yaml`. 새 의존성
   `PyYAML==6.0.3` 추가(사용자 확인 후). 신규 테스트 5건 포함 `tests/unit` 86 passed.
   실제 설정 파일로 실행해 `runs/<run_id>/{config.yaml, git_sha, packages.json}` 생성 확인.
-- [ ] W4-02 손실 Chamfer 구현·테스트, 학습 루프(전이쌍, 팀포싱)
+- [x] W4-02 손실 Chamfer 구현·테스트, 학습 루프(전이쌍, 팀포싱)
+  — 완료(2026-11-09) 증거: `reports/evidence/W4-02_chamfer_loss_train_loop.md`.
+  `src/etchpipe/train/chamfer_loss.py`(미분 가능, `torch.cdist`), `train/loop.py`
+  (`iter_transition_pairs`, `train_one_epoch`). 신규 테스트 8건 포함 `tests/unit` 94
+  passed. 토이 모델로 루프 검증(실제 MeshGraphNet 연결은 W4-03, 호스트에
+  nvidia-physicsnemo 미설치라 이번엔 확인 못 함).
 - [ ] W4-03 **소부분집합 과적합 테스트**(레시피 5개에서 손실이 0에 가깝게)
 - [ ] W4-04 본 학습(축소 모델 `processor_size=6, hidden=64`), 에폭당 시간 기록, 예산 3시간 이내 [제안]
 - [ ] W4-05 롤아웃 v1(연결 유지, 법선·엣지 재계산, 재료 이전 값 유지): K스텝 예측, val 오차 기록
