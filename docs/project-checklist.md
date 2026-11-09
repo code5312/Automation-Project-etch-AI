@@ -75,7 +75,6 @@
 목표: 본 데이터 생성을 **백그라운드로 먼저 시작**하고, 그동안 ETL을 완성한다.
 
 - [ ] W3-01 S1 결과로 `configs/sim/base.yaml` 확정(`depth_max`, 범위, K, rays), `make_recipes`로 레시피 N건, `splits.json`(train/val/test/ood/golden) — 1차 확정: `configs/sim/base.yaml`(2026-11-03). N=410(300/40/40/20/10) 시간예산 [확인, `W3-01_probe8_depthmax_kind.md`, parallelism=2 기준 약 2.7일]. `rays`·`grid_delta`는 정확도-속도 트레이드오프 검증 없이 [미확인] 상태로 보류 — 재검토 트리거: W3-03 ETL에서 표면 노이즈/부호 SDF 이상, 또는 W4 롤아웃 오차가 과도할 때. `make_recipes`/`make_splits` 실행 완료(2026-11-03) — 증거: `reports/evidence/W3-01_recipes_splits.md`(`scripts/gen_splits.py`, `data/recipes.json` 400건, `data/splits.json` train300/val40/test40/ood20, probe8 r0000~r0007 파라미터 불변 확인). 아직 남음: 골든셋(10) 선정 규칙(중심5·경계3·극단2) 알고리즘 결정 — ADR-0001 동결 스키마상 `splits.json`에 golden 키 추가 안 함.
-- [ ] W3-01-GPU (스파이크, 반나절 시간상자) Colab GPU 빌드로 r0004를 CPU와 동일 조건 재실행 → 물리 결과 오차·속도 이득 확인 후 N·시간 추정에 GPU 경로를 반영할지 판정. 근거: 정의서 §12 "필요 시 GPU 빌드 옵션 검토". 선행조건(사용자 직접): NVIDIA Developer 계정(OptiX SDK). 스크립트: `scripts/spike_w3_01_gpu_colab.py`, 판정표: `reports/evidence/W3-01-GPU_spike.md`
 - [x] W3-02 본 데이터 생성 시작(kind Job 또는 `xargs -P`), 진행률·실패율 요약 스크립트, 실패 건 재시도
   — 완료(2026-11-05) 증거: `reports/evidence/W3-02_gen_complete.md`(40/40 shard 전부 `Succeeded`,
   실패 0건, 400/400 run `meta.json` 완전성 확인, 로컬·GitHub Release·HF 3중 백업).
@@ -90,9 +89,22 @@
   — 완료(2026-11-07) 증거: `reports/evidence/W3-05_data_validation.md` (신규 테스트 5건
   포함 `test_etl.py` 25 passed, 전체 스위트 69 passed). 실제 N=400 전체 오류 0건,
   그래프 크기 예산(점 수 최대치)=663. `scripts/validate_data.py`.
-- [ ] W3-06 골든셋 확정: `golden/raw/` 10개 복사, `golden.json`, `golden_hash`, 변경 시 테스트 실패
-- [ ] W3-07 베이스라인 2종: (a) 변위 0, (b) 레시피→깊이 MLP 후 직선 외삽, val 지표 기록
-- [ ] W3-08 데이터 카드 초안(생성 방법·범위·알려진 한계·시뮬레이터 버전)
+- [x] W3-06 골든셋 확정: `golden/raw/` 10개 복사, `golden.json`, `golden_hash`, 변경 시 테스트 실패
+  — 완료(2026-11-08) 증거: `reports/evidence/W3-06_golden_set.md`. 선정 규칙(중심5·경계3·
+  극단2)을 SPACE 정규화 좌표의 공간 중심까지 거리로 구체화(`select_golden_recipes`),
+  train split에서 10건 선정·복사, `golden_hash=e95bdca4de55`. 신규 테스트 7건 포함
+  `tests/unit` 76 passed. 변조 시 테스트 실패를 수동으로도 확인(`params_hash` 변경 →
+  AssertionError, 복구 후 재통과).
+- [x] W3-07 베이스라인 2종: (a) 변위 0, (b) 레시피→깊이 MLP 후 직선 외삽, val 지표 기록
+  — 완료(2026-11-08) 증거: `reports/evidence/W3-07_baselines.md`
+  (+`W3-07_baseline_metrics.json`). 둘 다 최종 표면 1장 예측(t=0→actual_k) 기준 평가.
+  신규 테스트 5건 포함 `tests/unit` 81 passed. 실제 val(40건): (a) Chamfer 평균 14.464/
+  깊이오차 평균 40.964µm, (b) Chamfer 평균 8.552/깊이오차 평균 2.397µm.
+- [x] W3-08 데이터 카드 초안(생성 방법·범위·알려진 한계·시뮬레이터 버전)
+  — 완료(2026-11-09) 증거: `docs/data_card.md`. ViennaPS 4.5.0+ViennaLS 5.8.5, Sobol
+  샘플링, N=400 실측 집계(wall_sec/final_depth_um/조기종료 194건), 파라미터 범위 표,
+  golden 10건, W3-11/W3-12 버그 수정 이력과 **GitHub Release·HF가 아직 구버전**임을
+  한계로 명시. 금지 표현 검사 통과(grep 0건). W8-03에서 최종본으로 갱신 예정.
 - [x] W3-09 (계획 외 추가, 코드 리뷰로 발견) ETL 성능: `process_dataset`에 run_id 단위
   `ProcessPoolExecutor` 병렬화(`max_workers`, 기본값 1=기존과 동일, 회귀 없음) 추가.
   (E,N) 완전 벡터화는 실측상 6배 역효과(0.148s→0.928s)라 기각하고 레시피 단위
