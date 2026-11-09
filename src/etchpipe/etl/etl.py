@@ -72,8 +72,13 @@ def auto_yr(
     mask_height_max: float = MASK_HEIGHT_MAX_OOD,
     margin: float = Y_MARGIN,
 ) -> tuple[float, float]:
-    """거리장 y 격자 범위를 하드코딩 대신 depth_max·mask_height_max(OOD 포함)에서 자동 결정."""
-    return (-(depth_max + margin), mask_height_max + margin)
+    """거리장 y 격자 범위. 바닥은 depth_max+mask_height_max만큼, 위는 mask_height_max+margin만큼
+    여유를 둔다 — GPU 팀원 FNO 초안(`runs/fno_draft/best.mdlus`)이 학습에 쓴 범위
+    (−68~21, `docs/project-checklist.md` W4 역할분담 메모 2026-11-09)에 맞춤. 이전 버전은
+    바닥도 margin만 더해 −53~21이었음(ADR-0003 최초 값) — 이 값으로 교체하면서
+    `data/processed/<hash>/sdf/`(이전 범위로 생성됨)는 재생성이 필요하다
+    [미확인: 재생성 일정, graphs/는 이 함수를 쓰지 않아 영향 없음]."""
+    return (-(depth_max + mask_height_max), mask_height_max + margin)
 
 
 def dist_field(

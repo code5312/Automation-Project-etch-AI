@@ -62,3 +62,21 @@ point-in-polygon을 못 쓴다 — **even-odd 규칙**(항상 solid인 바닥에
 - 점 구름 최근접 거리 유지: 해석적 입력에서 값이 크게 틀려서 기각.
 - 체인을 닫힌 폴리곤으로 억지로 이어붙여 point-in-polygon 적용: 분기점·중복점 토폴로지가
   실측 데이터마다 달라 체인 연결 순서에 의존하는 방법은 깨지기 쉽다고 판단해 기각.
+
+## 업데이트 (2026-11-09): y 범위 공식 변경 [확인, 사용자 결정 2026-11-09]
+
+GPU 가용 팀원이 FNO(모델 B) 초안(`runs/fno_draft/best.mdlus`, train 300·val 40 기준 실측
+val Chamfer 중앙값 0.118µm — 이미 실전급 결과 보유)을 이 ADR의 원래 공식(바닥 margin만
+적용, `yr=(-53,21)`)과 다른 범위(`yr=(-68,21)`, 즉 바닥에 `mask_height_max`만큼 추가)로
+학습해 전달함. 팀원이 이미 완료한 학습 결과를 재활용하기 위해 **바닥 공식을 변경**:
+
+```
+auto_yr(depth_max, mask_height_max, margin) = (-(depth_max + mask_height_max), mask_height_max + margin)
+```
+
+결과: `yr = (-68.0, 21.0)`(위 범위는 변경 없음). §2의 원래 공식·결과값은 역사적 기록으로
+남겨두고 이 섹션으로 대체한다.
+
+**영향**: `data/processed/<dataset_hash>/sdf/`(이전 범위로 생성된 거리장)는 재생성이
+필요하다 — graphs/는 `auto_yr`을 쓰지 않아 영향 없음, `dataset_hash`도 영향 없음(simulation
+파라미터 기반이라 그리드 정의와 무관). 재생성 일정은 [미확인].
