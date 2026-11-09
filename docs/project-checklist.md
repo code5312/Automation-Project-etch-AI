@@ -138,6 +138,23 @@
 
 ## 4주차: 모델 A 학습과 롤아웃 판정
 
+**역할 분담 결정(2026-11-09)**: MeshGraphNet·FNO의 **학습·오차율 확인·재확인**은 GPU 가용 팀원이
+담당(아래 **[GPU 팀원]** 표기 항목). 그 외(모델 초안을 파이프라인에 매핑, 전체 흐름 1회 구성·연결)는
+CPU로 계속 진행(**[CPU/매핑]** 표기). 사유: CPU 컨테이너에서 MeshGraphNet 1 epoch(레시피 5개,
+전이쌍 71개)에 150~290초 소요(호스트 CPU 경쟁 포함) — 30 epoch 과적합 테스트조차 비효율적임을
+실측 확인(`scripts/_overfit_probe_tmp.py`, 아래 W4-03 참고).
+
+팀원이 전달한 MGN 초안(`runs/mgn_draft/ckpt_mgn.pt`, epoch=5, processor_size=**12**)·FNO
+초안(`runs/fno_draft/`, train 300·val 40 기준 val Chamfer 중앙값 0.118µm·깊이오차 0.92% —
+이미 실전급)을 분석해 입력 정규화 누락을 발견·수정(`train/loop.py`의
+`NodeEdgeNorm`/`load_norm_stats`, 2026-11-09 — `W4-02_chamfer_loss_train_loop.md` 추가
+참고). GPU 팀원은 학습 시 `train_one_epoch(..., norm=load_norm_stats("data/processed/<hash>/stats.json"))`로
+불러서 쓸 것. **processor_size 정리 완료**: 체크포인트 실측값 12로
+`MeshGraphNetModel`·`configs/model/mgn_v1.yaml` 기본값을 맞춤(이전 제안값 6에서 변경,
+2026-11-09). **FNO 격자 y범위 정리 완료**: `etl.auto_yr()`을 팀원 모델 기준 −68~21로 변경
+(아래 W6-11 메모 참고) — 기존 `data/processed/4b8c0ce1bc98/sdf/`는 이전 범위(−53~21)로
+생성된 것이라 재생성 필요[미확인: 재생성 일정].
+
 - [x] W4-01 학습 스크립트: YAML 설정 한 파일, 시드·설정·코드 SHA·패키지 버전을 `runs/`에 저장 → FR-06
   — 완료(2026-11-09) 증거: `reports/evidence/W4-01_train_script_skeleton.md`.
   `src/etchpipe/train/run_train.py`(`init_run`), `configs/model/mgn_v1.yaml`. 새 의존성
@@ -149,11 +166,24 @@
   (`iter_transition_pairs`, `train_one_epoch`). 신규 테스트 8건 포함 `tests/unit` 94
   passed. 토이 모델로 루프 검증(실제 MeshGraphNet 연결은 W4-03, 호스트에
   nvidia-physicsnemo 미설치라 이번엔 확인 못 함).
-- [ ] W4-03 **소부분집합 과적합 테스트**(레시피 5개에서 손실이 0에 가깝게)
-- [ ] W4-04 본 학습(축소 모델 `processor_size=6, hidden=64`), 에폭당 시간 기록, 예산 3시간 이내 [제안]
+- [ ] W4-03 **소부분집합 과적합 테스트**(레시피 5개에서 손실이 0에 가깝게) — **[GPU 팀원 이관,
+  2026-11-09]**. CPU(`etch-train:0.1` 컨테이너, `--memory=2g`)에서 실제 MeshGraphNet 래퍼
+  (`src/etchpipe/models/meshgraphnet.py`, processor_size=6/hidden=64)로 시도: lr=1e-3일 때
+  손실이 0.8635→0.7560(epoch 0~8)에서 plateau, 0에 가깝지 않음 확인. lr=1e-2로 재시도 중
+  (epoch 0: loss=1.0815, epoch당 150~290초, 호스트 CPU 경쟁으로 변동) 비효율 판단해 중단·이관.
+  이관 자료: `scripts/_overfit_probe_tmp.py`(임시 프로브, 미커밋), `docker/Dockerfile.train`
+  (`etch-train:0.1`, 빌드·import 검증됨), `data/processed/4b8c0ce1bc98/graphs/`(전체 400 run
+  변환 완료).
+- [ ] W4-04 본 학습(모델 `processor_size=12, hidden=64` — GPU 팀원 초안 체크포인트 실측값에
+  맞춤, 2026-11-09 변경), 에폭당 시간 기록, 예산 3시간 이내 [제안] — **[GPU 팀원]**
 - [ ] W4-05 롤아웃 v1(연결 유지, 법선·엣지 재계산, 재료 이전 값 유지): K스텝 예측, val 오차 기록
-- [ ] W4-06 롤아웃 오차 vs 베이스라인(a)(b) 비교표
-- [ ] W4-07 실패 시 롤아웃 v2(호길이 재샘플링) 시도 (시간 상자: 1.5일)
+  — **[CPU/매핑]** 롤아웃 루프 코드(법선·엣지 재계산, 재료 값 유지, K스텝 반복 적용)는 미학습
+  초안 체크포인트로 배관만 검증 가능(정확도 의미 없음). **[GPU 팀원]** 실제 학습된 체크포인트
+  기준 val 오차 기록은 W4-04 완료 후.
+- [ ] W4-06 롤아웃 오차 vs 베이스라인(a)(b) 비교표 — **[CPU/매핑]** 비교표 스크립트는 지금 준비,
+  **[GPU 팀원]** 실제 수치는 학습 결과 반영 후 채움.
+- [ ] W4-07 실패 시 롤아웃 v2(호길이 재샘플링) 시도 (시간 상자: 1.5일) — **[GPU 팀원]** (D4 판정 이후,
+  필요 시)
 
 **판정 D4 (주 말)**: val 최종 스텝 Chamfer가 베이스라인 (b)보다 작으면 **통과**. 아니면 **후퇴**:
 - 후퇴안: **최종 프로파일 1장 예측** — 입력 (초기 표면, Θ) → 출력 최종 표면. 학습 쌍을 (0, K)로 바꾸고 롤아웃 제거. 게이트·평가는 최종 스텝 Chamfer 기준으로 그대로 사용 [제안]
@@ -189,6 +219,8 @@
 - [ ] W6-02 모니터: 신규 레시피 10개를 live 설정으로 시뮬레이션 → champion 예측과 Chamfer 비교 → `drift_threshold`(= champion 골든 Chamfer × 1.5) 초과 시 **자동 반복 루프**(ADR-0002) 트리거 → FR-09
 - [ ] W6-03 드리프트 데이터 60개 생성(train 40 / val 10 / golden_drift 10) → ETL → 새 `dataset_hash` — 루프 1차 시도의 입력
 - [ ] W6-04 **자동 반복 루프 구현(최대 4회, ADR-0002)**: 1차 champion에서 3~5에폭 미세조정 → 게이트. BLOCK이면 2차(드리프트 train 40→100개 자동 확장 재생성, ViennaPS 추가 호출) → 게이트. BLOCK이면 3차(에폭 10~15) → 4차(학습률 조정) 순서로 자동 진행. 어느 시도든 PASS면 즉시 승격하고 루프 종료, 4회 모두 BLOCK이면 champion 유지 + 알림. 시도마다 게이트 결과 기록
+  — **[CPU/매핑]** 루프 오케스트레이션 코드(시도 순서·게이트 호출·기록)는 CPU에서 구현 가능.
+  **[GPU 팀원]** 실제 미세조정(에폭 실행) 자체는 GPU에서 수행.
 - [ ] W6-05 `python -m etchpipe.retrain run` 단일 명령으로 전 과정(에스컬레이션 루프 포함) 무개입 실행, `reports/evidence/retrain_<ts>.json`에 `attempts: [{attempt, config, gate_result}, ...]` 기록
 - [ ] W6-06 **증거 ② 제출본**: 승격까지 완주한 실행 1회 이상(자동 반복 과정 포함) + 재학습 전/후 오차 표 + 시도별 로그. 4회 모두 BLOCK이면 그 자체를 결과로 기록(사람이 사후 원인 분석, 이번 루프의 무개입 완주 정의는 깨지 않음)
 - [ ] W6-07 `retrain-demo` 수동 워크플로(소규모 설정)
@@ -199,7 +231,9 @@
 - [ ] W6-10 `docker-compose.yml`, 로컬 직접 실행 문서화, 두 방식 모두 `/health` 확인, 지연 측정(조건 병기)
 
 ### ③ 모델 B (마지막, 줄일 수 있음)
-- [ ] W6-11 FNO 구현(S6 결과 기반), CPU 학습(격자 128×256, 느리면 64×128), SDF 0등고선 복원 → FR-08
+- [ ] W6-11 FNO 구현(S6 결과 기반), SDF 0등고선 복원 → FR-08 — **[CPU/매핑]** 모델 래퍼·입출력
+  매핑 코드(`src/etchpipe/models/fno.py`, MeshGraphNet 래퍼와 같은 패턴)는 CPU에서 작성.
+  **[GPU 팀원]** 실제 학습(원래 계획 "CPU 학습(격자 128×256)"에서 변경, GPU로 진행)·오차율 확인.
 - [ ] W6-12 모델 A/B 비교표(같은 test 분할·지표·조건)
 - [ ] W6-13 시간이 모자라면 모델 B를 "단일 조건 단순 비교"로 축소하고 비교표는 유지, 축소 내용을 문서에 기록
 
