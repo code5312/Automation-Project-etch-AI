@@ -177,9 +177,12 @@ CPU로 계속 진행(**[CPU/매핑]** 표기). 사유: CPU 컨테이너에서 Me
 - [ ] W4-04 본 학습(모델 `processor_size=12, hidden=64` — GPU 팀원 초안 체크포인트 실측값에
   맞춤, 2026-11-09 변경), 에폭당 시간 기록, 예산 3시간 이내 [제안] — **[GPU 팀원]**
 - [ ] W4-05 롤아웃 v1(연결 유지, 법선·엣지 재계산, 재료 이전 값 유지): K스텝 예측, val 오차 기록
-  — **[CPU/매핑]** 롤아웃 루프 코드(법선·엣지 재계산, 재료 값 유지, K스텝 반복 적용)는 미학습
-  초안 체크포인트로 배관만 검증 가능(정확도 의미 없음). **[GPU 팀원]** 실제 학습된 체크포인트
-  기준 val 오차 기록은 W4-04 완료 후.
+  — **[CPU/매핑] 완료(2026-11-09)**: `src/etchpipe/train/rollout.py`(`rollout`,
+  `rollout_val_error`, `recompute_edge_features`, `recompute_normals`) 구현, 토이 모델로
+  연결·재료·theta 불변·t 증가를 직접 대조 검증 + 실제 fixture로 `rollout_val_error` 플러밍
+  확인 — 증거: `reports/evidence/W4-05_rollout_v1.md`(신규 테스트 6건 포함 `tests/unit` 93
+  passed). **[GPU 팀원]** 실제 학습된 체크포인트(`processor_size=12`) 기준 val 40개
+  오차 기록은 W4-04 완료 후 `rollout_val_error(..., norm=load_norm_stats(...))`로 채움.
 - [ ] W4-06 롤아웃 오차 vs 베이스라인(a)(b) 비교표 — **[CPU/매핑]** 비교표 스크립트는 지금 준비,
   **[GPU 팀원]** 실제 수치는 학습 결과 반영 후 채움.
 - [ ] W4-07 실패 시 롤아웃 v2(호길이 재샘플링) 시도 (시간 상자: 1.5일) — **[GPU 팀원]** (D4 판정 이후,

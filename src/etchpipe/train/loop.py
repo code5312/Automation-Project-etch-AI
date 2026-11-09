@@ -65,7 +65,8 @@ def normalize_edge(edge: torch.Tensor, norm: NodeEdgeNorm) -> torch.Tensor:
     return (edge - norm.edge_mean) / norm.edge_std
 
 
-def _load_graph(path) -> dict[str, torch.Tensor]:
+def load_graph(path) -> dict[str, torch.Tensor]:
+    """그래프 npz 1개(`etl.to_graph` 출력) 로드. 롤아웃(`train/rollout.py`)에서도 재사용."""
     z = np.load(path)
     return {
         "node": torch.from_numpy(z["node"]),
@@ -82,8 +83,8 @@ def iter_transition_pairs(graphs_root, run_ids: list[str]) -> Iterator[dict[str,
     for rid in sorted(run_ids):
         files = sorted((root / rid).glob("g*.npz"))
         for a, b in zip(files, files[1:]):
-            cur = _load_graph(a)
-            nxt = _load_graph(b)
+            cur = load_graph(a)
+            nxt = load_graph(b)
             yield {
                 "run_id": rid,
                 "node": cur["node"],
