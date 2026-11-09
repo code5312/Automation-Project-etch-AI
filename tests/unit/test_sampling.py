@@ -1,6 +1,14 @@
 """W2-02: sampling.make_recipes/make_splits 단위 테스트."""
 
-from etchpipe.sim.sampling import SPACE, make_ood_recipes, make_recipes, make_splits
+import numpy as np
+
+from etchpipe.sim.sampling import (
+    SPACE,
+    make_ood_recipes,
+    make_recipes,
+    make_splits,
+    select_golden_recipes,
+)
 
 
 def test_same_seed_same_result() -> None:
@@ -60,3 +68,30 @@ def test_ood_linear_params_never_negative() -> None:
             ood = make_ood_recipes(50, seed=seed)
             for r in ood:
                 assert r["params"][name] > 0, (name, r)
+
+
+def test_select_golden_recipes_sizes_and_roles() -> None:
+    """W3-06: 중심5·경계3·극단2 규칙 — 10개, 중복 없음, 역할별 개수 일치."""
+    recipes = make_recipes(50, seed=0)
+    picked = select_golden_recipes(recipes, n_center=5, n_edge=3, n_extreme=2)
+    assert len(picked) == 10
+    ids = [r["run_id"] for r in picked]
+    assert len(set(ids)) == 10
+
+
+def test_select_golden_recipes_deterministic() -> None:
+    recipes = make_recipes(50, seed=0)
+    a = select_golden_recipes(recipes)
+    b = select_golden_recipes(recipes)
+    assert a == b
+
+
+def test_select_golden_recipes_center_closer_than_extreme() -> None:
+    """중심으로 뽑힌 레시피가 극단으로 뽑힌 레시피보다 공간 중심에 더 가까워야 한다."""
+    from etchpipe.sim.sampling import normalize_params
+
+    recipes = make_recipes(50, seed=0)
+    picked = select_golden_recipes(recipes, n_center=5, n_edge=3, n_extreme=2)
+    center_dists = [np.linalg.norm(normalize_params(r["params"]) - 0.5) for r in picked[:5]]
+    extreme_dists = [np.linalg.norm(normalize_params(r["params"]) - 0.5) for r in picked[-2:]]
+    assert max(center_dists) <= min(extreme_dists)

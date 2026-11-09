@@ -1,0 +1,149 @@
+{
+  "rule": "center5_edge3_extreme2",
+  "source_split": "train",
+  "run_ids": [
+    "r0007",
+    "r0015",
+    "r0079",
+    "r0100",
+    "r0185",
+    "r0187",
+    "r0235",
+    "r0240",
+    "r0254",
+    "r0274"
+  ],
+  "selected": [
+    {
+      "run_id": "r0185",
+      "role": "center",
+      "params": {
+        "ion_flux": 7.496720726625484,
+        "etchant_flux": 2539.603790663842,
+        "oxygen_flux": 496.8946632149593,
+        "ion_mean_energy": 129.76682437583804,
+        "ion_exponent": 314.96283410648437,
+        "mask_width": 10.205135755240917,
+        "mask_height": 10.933097966015339
+      }
+    },
+    {
+      "run_id": "r0007",
+      "role": "center",
+      "params": {
+        "ion_flux": 9.889652374465498,
+        "etchant_flux": 3090.2480668684298,
+        "oxygen_flux": 1245.8361892673583,
+        "ion_mean_energy": 92.96157043427229,
+        "ion_exponent": 318.31318049957326,
+        "mask_width": 10.428883522748947,
+        "mask_height": 9.890424057841301
+      }
+    },
+    {
+      "run_id": "r0240",
+      "role": "center",
+      "params": {
+        "ion_flux": 13.387711311015517,
+        "etchant_flux": 6168.724014672758,
+        "oxygen_flux": 797.0613119718713,
+        "ion_mean_energy": 153.47937904298306,
+        "ion_exponent": 351.1695163346178,
+        "mask_width": 9.565943710505962,
+        "mask_height": 12.080778703093529
+      }
+    },
+    {
+      "run_id": "r0079",
+      "role": "center",
+      "params": {
+        "ion_flux": 13.028146356378215,
+        "etchant_flux": 3868.0853152885306,
+        "oxygen_flux": 905.4035375741585,
+        "ion_mean_energy": 170.26397613808513,
+        "ion_exponent": 430.689355899311,
+        "mask_width": 11.368391394615173,
+        "mask_height": 10.379830315709114
+      }
+    },
+    {
+      "run_id": "r0254",
+      "role": "center",
+      "params": {
+        "ion_flux": 6.43710593389468,
+        "etchant_flux": 8605.833897072356,
+        "oxygen_flux": 932.4262211465142,
+        "ion_mean_energy": 109.31476368568838,
+        "ion_exponent": 470.3684591758252,
+        "mask_width": 10.924494408071041,
+        "mask_height": 10.726626873016357
+      }
+    },
+    {
+      "run_id": "r0235",
+      "role": "edge",
+      "params": {
+        "ion_flux": 27.314286594355902,
+        "etchant_flux": 1579.441753601177,
+        "oxygen_flux": 2232.4564803160943,
+        "ion_mean_energy": 151.37185230851173,
+        "ion_exponent": 188.3268481657318,
+        "mask_width": 13.347481802105904,
+        "mask_height": 13.529755346477032
+      }
+    },
+    {
+      "run_id": "r0100",
+      "role": "edge",
+      "params": {
+        "ion_flux": 22.63382941870716,
+        "etchant_flux": 11349.563251670472,
+        "oxygen_flux": 591.9248039527795,
+        "ion_mean_energy": 187.36944058910012,
+        "ion_exponent": 105.70621774350943,
+        "mask_width": 7.425595432519913,
+        "mask_height": 13.988467209041119
+      }
+    },
+    {
+      "run_id": "r0015",
+      "role": "edge",
+      "params": {
+        "ion_flux": 13.563160413482922,
+        "etchant_flux": 1421.2107726902932,
+        "oxygen_flux": 257.96802934756755,
+        "ion_mean_energy": 68.64734585396945,
+        "ion_exponent": 180.15518817665,
+        "mask_width": 13.562272429466248,
+        "mask_height": 6.036657422780991
+      }
+    },
+    {
+      "run_id": "r0274",
+      "role": "extreme",
+      "params": {
+        "ion_flux": 4.178703645767639,
+        "etchant_flux": 11136.671159403186,
+        "oxygen_flux": 277.07954664221785,
+        "ion_mean_energy": 194.37928418628871,
+        "ion_exponent": 832.1802724403236,
+        "mask_width": 13.364775367081165,
+        "mask_height": 8.052728869020939
+      }
+    },
+    {
+      "run_id": "r0187",
+      "role": "extreme",
+      "params": {
+        "ion_flux": 24.755665073505536,
+        "etchant_flux": 1531.6794337717417,
+        "oxygen_flux": 355.1101481674783,
+        "ion_mean_energy": 191.52249451726675,
+        "ion_exponent": 948.5484463997486,
+        "mask_width": 7.51494488120079,
+        "mask_height": 12.861395128071308
+      }
+    }
+  ],
+  "golden_hash": "e95bdca4de55"
+}

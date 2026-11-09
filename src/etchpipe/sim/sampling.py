@@ -63,6 +63,35 @@ def make_ood_recipes(n_total: int, seed: int = 0, extend: float = 1.5) -> list[d
     return out
 
 
+def normalize_params(params: dict) -> np.ndarray:
+    """SPACE 범위를 [0,1]로 정규화한 좌표(log 스케일은 로그 공간에서 정규화)."""
+    out = []
+    for name, lo, hi, log in SPACE:
+        v = params[name]
+        if log:
+            out.append((np.log(v) - np.log(lo)) / (np.log(hi) - np.log(lo)))
+        else:
+            out.append((v - lo) / (hi - lo))
+    return np.array(out)
+
+
+def select_golden_recipes(
+    recipes: list[dict], n_center: int = 5, n_edge: int = 3, n_extreme: int = 2
+) -> list[dict]:
+    """골든셋 10개 선정 규칙(W3-06, 중심5·경계3·극단2).
+    SPACE 정규화 좌표에서 공간 중심(0.5,...,0.5)까지의 유클리드 거리로 정렬해,
+    가장 가까운 n_center개=중심, 가장 먼 n_extreme개=극단, 그 다음으로 먼 n_edge개=경계로 나눈다.
+    recipes 순서가 같으면 항상 같은 10개가 나온다(결정적)."""
+    ranked = sorted(
+        recipes, key=lambda r: float(np.linalg.norm(normalize_params(r["params"]) - 0.5))
+    )
+    center = ranked[:n_center]
+    rest = ranked[n_center:]
+    edge = rest[: len(rest) - n_extreme][-n_edge:]
+    extreme = rest[-n_extreme:]
+    return center + edge + extreme
+
+
 def make_splits(
     n_train: int = 300, n_val: int = 40, n_test: int = 40, n_ood: int = 20, seed: int = 0
 ) -> dict[str, list[dict]]:

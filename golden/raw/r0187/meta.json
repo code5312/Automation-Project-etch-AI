@@ -1,0 +1,23 @@
+{
+ "params": {
+  "ion_flux": 24.755665073505536,
+  "etchant_flux": 1531.6794337717417,
+  "oxygen_flux": 355.1101481674783,
+  "ion_mean_energy": 191.52249451726675,
+  "ion_exponent": 948.5484463997486,
+  "mask_width": 7.51494488120079,
+  "mask_height": 12.861395128071308
+ },
+ "K": 20,
+ "actual_k": 17,
+ "step_min": 1.0,
+ "rays": 300,
+ "seed": 42,
+ "grid_delta": 0.3,
+ "depth_max": 50.0,
+ "stopped_early": true,
+ "final_depth_um": 50.7,
+ "viennaps": "4.5.0",
+ "wall_sec": 1342.5,
+ "params_hash": "1678fee5c4"
+}
