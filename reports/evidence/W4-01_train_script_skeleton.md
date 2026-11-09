@@ -67,7 +67,9 @@ runs\20261109T014354191805_ead551
 
 - `configs/model/mgn_v1.yaml`은 W4-02~04(학습 루프·과적합 테스트·본 학습)가 그대로 로드해
   쓸 수 있는 1차 초안이다. `processor_size=6`은 W4-04의 축소 모델 값에 맞춤 [제안].
-  **정정(2026-11-09)**: GPU 팀원이 전달한 MGN 초안 체크포인트가 실제로는 12층으로
-  학습돼 있음을 확인해 `processor_size=12`로 변경(`docs/project-checklist.md` W4 역할분담
-  메모 참고) — 이 파일의 `[제안]` 값은 초기 추정이었고 실측으로 대체됨.
+  **정정(2026-11-09, 재정정)**: GPU 팀원 체크포인트의 `processor_layers`가 12개라 한 번
+  `processor_size=12`로 바꿨었는데, W4-06에서 `load_state_dict`가 실패해 재확인 — physicsnemo
+  소스상 `processor_layers` 개수는 `2*processor_size`(edge_block·node_block 번갈아 쌓임)라
+  12개는 `processor_size=6`이 맞다[확인, `load_state_dict` 성공으로 검증]. 결국 이 파일의
+  원래 `[제안]` 값(6)이 맞았다 — 상세는 `reports/evidence/W4-06_rollout_vs_baseline.md` 참고.
 - `runs/`는 이미 `.gitignore`(`/runs/`)로 제외돼 있어 추가 조치 불필요.

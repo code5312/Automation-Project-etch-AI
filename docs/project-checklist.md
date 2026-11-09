@@ -144,16 +144,20 @@ CPU로 계속 진행(**[CPU/매핑]** 표기). 사유: CPU 컨테이너에서 Me
 전이쌍 71개)에 150~290초 소요(호스트 CPU 경쟁 포함) — 30 epoch 과적합 테스트조차 비효율적임을
 실측 확인(`scripts/_overfit_probe_tmp.py`, 아래 W4-03 참고).
 
-팀원이 전달한 MGN 초안(`runs/mgn_draft/ckpt_mgn.pt`, epoch=5, processor_size=**12**)·FNO
-초안(`runs/fno_draft/`, train 300·val 40 기준 val Chamfer 중앙값 0.118µm·깊이오차 0.92% —
-이미 실전급)을 분석해 입력 정규화 누락을 발견·수정(`train/loop.py`의
+팀원이 전달한 MGN 초안(`runs/mgn_draft/ckpt_mgn.pt`, epoch=5, `processor.processor_layers`
+12개)·FNO 초안(`runs/fno_draft/`, train 300·val 40 기준 val Chamfer 중앙값 0.118µm·깊이오차
+0.92% — 이미 실전급)을 분석해 입력 정규화 누락을 발견·수정(`train/loop.py`의
 `NodeEdgeNorm`/`load_norm_stats`, 2026-11-09 — `W4-02_chamfer_loss_train_loop.md` 추가
 참고). GPU 팀원은 학습 시 `train_one_epoch(..., norm=load_norm_stats("data/processed/<hash>/stats.json"))`로
-불러서 쓸 것. **processor_size 정리 완료**: 체크포인트 실측값 12로
-`MeshGraphNetModel`·`configs/model/mgn_v1.yaml` 기본값을 맞춤(이전 제안값 6에서 변경,
-2026-11-09). **FNO 격자 y범위 정리 완료**: `etl.auto_yr()`을 팀원 모델 기준 −68~21로 변경
-(아래 W6-11 메모 참고) — 기존 `data/processed/4b8c0ce1bc98/sdf/`는 이전 범위(−53~21)로
-생성된 것이라 재생성 필요[미확인: 재생성 일정].
+불러서 쓸 것. **processor_size 정리(정정, 2026-11-09)**: 레이어 12개를 보고 처음엔
+`processor_size=12`로 바꿨는데, W4-06에서 실제로 `load_state_dict`를 돌려보니 실패 —
+physicsnemo 소스 확인 결과 `processor_layers` 개수는 `2*processor_size`(edge_block·
+node_block이 번갈아 쌓임)라 레이어 12개는 **`processor_size=6`**이 맞음(원래 제안값과
+같음). `MeshGraphNetModel`·`configs/model/mgn_v1.yaml` 기본값을 6으로 되돌림 — 상세는
+`reports/evidence/W4-06_rollout_vs_baseline.md` 참고. **FNO 격자 y범위 정리 완료**:
+`etl.auto_yr()`을 팀원 모델 기준 −68~21로 변경(아래 W6-11 메모 참고) — 기존
+`data/processed/4b8c0ce1bc98/sdf/`는 이전 범위(−53~21)로 생성된 것이라 재생성 필요
+[미확인: 재생성 일정].
 
 - [x] W4-01 학습 스크립트: YAML 설정 한 파일, 시드·설정·코드 SHA·패키지 버전을 `runs/`에 저장 → FR-06
   — 완료(2026-11-09) 증거: `reports/evidence/W4-01_train_script_skeleton.md`.
@@ -174,17 +178,24 @@ CPU로 계속 진행(**[CPU/매핑]** 표기). 사유: CPU 컨테이너에서 Me
   이관 자료: `scripts/_overfit_probe_tmp.py`(임시 프로브, 미커밋), `docker/Dockerfile.train`
   (`etch-train:0.1`, 빌드·import 검증됨), `data/processed/4b8c0ce1bc98/graphs/`(전체 400 run
   변환 완료).
-- [ ] W4-04 본 학습(모델 `processor_size=12, hidden=64` — GPU 팀원 초안 체크포인트 실측값에
-  맞춤, 2026-11-09 변경), 에폭당 시간 기록, 예산 3시간 이내 [제안] — **[GPU 팀원]**
+- [ ] W4-04 본 학습(모델 `processor_size=6, hidden=64` — GPU 팀원 초안 체크포인트와
+  `load_state_dict`로 검증[확인], 한 번 12로 잘못 바꿨다가 정정함, 2026-11-09), 에폭당
+  시간 기록, 예산 3시간 이내 [제안] — **[GPU 팀원]**
 - [ ] W4-05 롤아웃 v1(연결 유지, 법선·엣지 재계산, 재료 이전 값 유지): K스텝 예측, val 오차 기록
   — **[CPU/매핑] 완료(2026-11-09)**: `src/etchpipe/train/rollout.py`(`rollout`,
   `rollout_val_error`, `recompute_edge_features`, `recompute_normals`) 구현, 토이 모델로
   연결·재료·theta 불변·t 증가를 직접 대조 검증 + 실제 fixture로 `rollout_val_error` 플러밍
   확인 — 증거: `reports/evidence/W4-05_rollout_v1.md`(신규 테스트 6건 포함 `tests/unit` 93
-  passed). **[GPU 팀원]** 실제 학습된 체크포인트(`processor_size=12`) 기준 val 40개
+  passed). **[GPU 팀원]** 실제 학습된 체크포인트(`processor_size=6`) 기준 val 40개
   오차 기록은 W4-04 완료 후 `rollout_val_error(..., norm=load_norm_stats(...))`로 채움.
-- [ ] W4-06 롤아웃 오차 vs 베이스라인(a)(b) 비교표 — **[CPU/매핑]** 비교표 스크립트는 지금 준비,
-  **[GPU 팀원]** 실제 수치는 학습 결과 반영 후 채움.
+- [x] W4-06 롤아웃 오차 vs 베이스라인(a)(b) 비교표 — **[CPU/매핑] 완료(2026-11-09)**:
+  `scripts/run_rollout_comparison.py` 작성, GPU 팀원 MGN 초안 체크포인트(epoch=5, 미수렴)로
+  실제 실행까지 완료 — 증거: `reports/evidence/W4-06_rollout_vs_baseline.md`. 이 과정에서
+  `processor_size=12` 판단이 틀렸음을 발견·정정(6이 맞음, 위 W4-03/W4-04 메모 갱신)하고,
+  `MeshGraphNetModel`이 인코더/디코더 `hidden_dim_*`를 안 넘겨 128로 만들어지던 버그도
+  발견·수정. 결과(참고용, 미수렴 체크포인트라 게이트 근거 아님): 모델 A 롤아웃 Chamfer
+  중앙값 1.335 vs 베이스라인(b) 9.133, 깊이오차 중앙값 1.119 vs 1.910 — 베이스라인보다
+  나음. **[GPU 팀원]** W4-04 정식 체크포인트로 재실행 필요.
 - [ ] W4-07 실패 시 롤아웃 v2(호길이 재샘플링) 시도 (시간 상자: 1.5일) — **[GPU 팀원]** (D4 판정 이후,
   필요 시)
 

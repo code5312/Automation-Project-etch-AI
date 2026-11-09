@@ -13,10 +13,19 @@ torch.optim.Adam(wrapper.parameters(), ...)`가 그대로 동작한다.
 입출력 차원은 설계서 §3 C3: `input_dim_nodes=14`(`etl.to_graph` 출력과 일치),
 `input_dim_edges=3`, `output_dim=2`(변위 dx,dy).
 
-`processor_size=12`(기본값): GPU 팀원이 전달한 MGN 초안 체크포인트(`runs/mgn_draft/ckpt_mgn.pt`)의
-`processor.processor_layers.0~11` 실측 레이어 수에 맞춤(2026-11-09, 설계서 §3 C3 제안 범위
-8~15 안에 포함) — 이전 기본값 6(체크리스트 초안 W4-04 제안)과는 다름, 이 체크포인트를
-`load_state_dict`로 바로 불러오려면 반드시 일치해야 함.
+`processor_size=6`(기본값, [확인] 2026-11-09): physicsnemo 소스 실측(`meshgraphnet.py`의
+`layers = list(chain(*zip(edge_blocks, node_blocks)))`) — `processor_size`개의 edge_block과
+`processor_size`개의 node_block을 번갈아 쌓아 `processor_layers`는 **`2*processor_size`**개가
+된다. GPU 팀원 체크포인트(`runs/mgn_draft/ckpt_mgn.pt`)의 `processor.processor_layers.0~11`
+(12개)은 그래서 `processor_size=6`과 일치 — 한 번 `processor_size=12`로 잘못 바꿨다가
+(인덱스 개수를 그대로 processor_size로 착각) `load_state_dict` 실패로 발견·정정함, 상세는
+`reports/evidence/W4-06_rollout_vs_baseline.md` 참고.
+
+`hidden_dim_node_encoder`/`hidden_dim_edge_encoder`/`hidden_dim_node_decoder`도
+`hidden_dim_processor`와 같은 값으로 명시해 전달한다 — physicsnemo `MeshGraphNet`은 이
+셋을 `hidden_dim_processor`와 **별도로** 받고 기본값이 각각 128이라, 전달하지 않으면
+`hidden_dim_processor=64`를 줘도 인코더/디코더는 128로 만들어져 체크포인트(전부 64)
+로드가 `load_state_dict` 크기 불일치로 실패한다(2026-11-09, W4-06에서 실제로 겪고 발견).
 """
 
 import torch
@@ -31,7 +40,7 @@ class MeshGraphNetModel(nn.Module):
         input_dim_nodes: int = 14,
         input_dim_edges: int = 3,
         output_dim: int = 2,
-        processor_size: int = 12,
+        processor_size: int = 6,
         hidden_dim_processor: int = 64,
     ) -> None:
         super().__init__()
@@ -41,6 +50,9 @@ class MeshGraphNetModel(nn.Module):
             output_dim=output_dim,
             processor_size=processor_size,
             hidden_dim_processor=hidden_dim_processor,
+            hidden_dim_node_encoder=hidden_dim_processor,
+            hidden_dim_edge_encoder=hidden_dim_processor,
+            hidden_dim_node_decoder=hidden_dim_processor,
         )
 
     def forward(

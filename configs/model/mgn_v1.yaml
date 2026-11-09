@@ -1,8 +1,10 @@
-# W4-01: 모델 A(MeshGraphNet) 학습 설정 1차 초안. 설계서 §3 C3(processor_size=8~15,
-# hidden_dim_processor=64~128) 범위 안. processor_size=12는 임의값이 아니라 GPU 팀원이
-# 전달한 MGN 초안 체크포인트(runs/mgn_draft/ckpt_mgn.pt)의 실측 레이어 수(2026-11-09,
-# docs/project-checklist.md W4 역할분담 메모 참고) — 이 값이어야 해당 체크포인트를
-# load_state_dict로 이어 쓸 수 있다. 이전 제안값(6)에서 변경.
+# W4-01: 모델 A(MeshGraphNet) 학습 설정 1차 초안. processor_size=6은 GPU 팀원이 전달한 MGN
+# 초안 체크포인트(runs/mgn_draft/ckpt_mgn.pt)와 실제로 맞는 값이다[확인, 2026-11-09,
+# load_state_dict 성공으로 검증, reports/evidence/W4-06_rollout_vs_baseline.md].
+# **정정**: 한 번 12로 바꿨었는데 physicsnemo 소스상 processor_layers 개수가
+# 2*processor_size라(edge_block·node_block이 번갈아 쌓임) 체크포인트의 12개 레이어는
+# processor_size=6이 맞음 — load_state_dict 실패로 발견. 설계서 §3 C3의 제안 범위(8~15)보다
+# 작지만, 실제 작동하는 체크포인트 실측값을 따른다.
 
 seed: 20261027
 
@@ -15,7 +17,7 @@ model:
     input_dim_nodes: 14
     input_dim_edges: 3
     output_dim: 2
-    processor_size: 12    # GPU 팀원 MGN 초안 체크포인트 실측값에 맞춤 [확인, 2026-11-09]
+    processor_size: 6     # GPU 팀원 MGN 초안 체크포인트와 load_state_dict로 검증 [확인, 2026-11-09]
     hidden_dim_processor: 64
 
 train:
