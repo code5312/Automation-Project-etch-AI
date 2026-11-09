@@ -23,13 +23,10 @@ target-version = "py311"
 # 스파이크 1회용 코드는 스타일 규칙에서 제외한다:
 #   - sim_batch.py/mgn_smoke_test.py: seed/에서 그대로 옮긴 원본 — 내용을 수정하지 않기로
 #     했음(사용자 지시). 2주차 이후 정식 구현으로 교체되면서 자연히 없어질 예정.
-#   - spike_w3_01_gpu_colab.py: Colab에 그대로 복붙할 코드 블록을 문자열로 담고 있어,
-#     줄바꿈을 끼워 넣으면 복붙용 스니펫이 깨질 위험이 있음(2026-11-03 lint 검사 중 발견).
 #   - reports/evidence/의 스크립트도 스파이크 1회용 코드라 같은 이유로 제외한다.
 extend-exclude = [
     "src/etchpipe/sim/sim_batch.py",
     "scripts/mgn_smoke_test.py",
-    "scripts/spike_w3_01_gpu_colab.py",
     "reports/evidence",
 ]
 
