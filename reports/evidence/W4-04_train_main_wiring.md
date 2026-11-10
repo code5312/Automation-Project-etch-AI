@@ -74,3 +74,50 @@ PYTHONPATH=src python -m etchpipe.train.train_main configs/model/mgn_v1.yaml \
   증거로 쓸 수 있다.
 - `--time-budget-hours`는 GPU 속도에 맞게 조정 가능 — 기존 "3시간" 예산은 CPU 기준
   [제안]이었으므로 GPU에서는 사용자 판단으로 늘리거나 줄여도 됨.
+
+## 업데이트 (2026-11-10): val 추적 + `ckpt_best.pt` 추가 [확인]
+
+실제 GPU 본 학습(epoch=99, train loss 0.031) 결과를 롤아웃으로 평가해보니, 5에폭짜리
+미수렴 초안보다 Chamfer·깊이오차가 **둘 다 더 나쁘게** 나왔다(`reports/model_issues_mgn.md`
+문제①). `run_training`이 매 에폭 `ckpt_last.pt`만 덮어써서 val 기준으로 어느 에폭이
+실제로 좋았는지 알 방법이 없었던 게 원인으로 보여, val 평가와 best 체크포인트 저장을
+추가했다.
+
+- `src/etchpipe/train/loop.py`: `evaluate(model, graphs_root, run_ids, norm=None,
+  device="cpu")` 추가 — `train_one_epoch`과 같은 teacher-forcing 손실을 `torch.no_grad()`로
+  역전파 없이 계산(`model.eval()`로 전환 후 원래 모드로 복귀). 두 함수가 공유하는
+  텐서 이동·정규화 로직을 `_prepare_pair`/`_norm_to_device`로 뽑아냄(중복 제거).
+- `src/etchpipe/train/train_main.py`: `run_training`에 `val_ids`/`val_every`(기본 매 에폭)
+  추가 — val이 주어지면 매 에폭(또는 `val_every`마다) `evaluate`로 val 손실을 계산해
+  `metrics.json`에 `val_loss`로 남기고, 지금까지 중 최소면 `ckpt_best.pt`(`state_dict`+
+  `epoch`+`val_loss`)를 별도 저장. `ckpt_last.pt`는 그대로 마지막 에폭 유지(비교용).
+  `main()`은 `splits.json`의 `"val"`을 자동으로 넘기고, CLI에 `--val-every` 추가.
+
+### 테스트 (신규 2건, 총 97 passed)
+
+- `test_run_training_records_val_loss_each_epoch`: 실제 fixture로 train 2개/val 1개 run
+  분리 → 매 에폭 `val_loss` 기록, `ckpt_best.pt` 생성 확인.
+- `test_run_training_saves_best_checkpoint_by_val_loss_not_last_epoch`: `train_one_epoch`/
+  `evaluate`를 monkeypatch로 `[1.0, 0.5, 0.8]` 시퀀스로 고정 → `ckpt_best.pt`가 **마지막
+  에폭(2)이 아니라 최소값 에폭(1)**을 저장함을 직접 확인 — "마지막 에폭이 항상 최선은
+  아니다"라는 문제 자체를 검증.
+
+```
+docker run --rm --memory=2g -v "<repo>:/app" -w /app etch-train:0.1 bash -lc "
+python -m ruff check src/ tests/   # All checks passed
+PYTHONPATH=src python -m pytest tests/unit -q --ignore=tests/unit/test_serve.py
+"
+→ 97 passed, 3 failed(기존 git 미설치 환경 한계, 오늘 변경과 무관)
+```
+
+### GPU 재실행 방법 (val 추적 포함, 기존 명령과 동일하되 자동으로 val도 봄)
+
+```
+PYTHONPATH=src python -m etchpipe.train.train_main configs/model/mgn_v1.yaml \
+    --device cuda --time-budget-hours 3.5
+```
+
+`val_ids`는 `main()`이 `data/splits.json["val"]`에서 자동으로 읽으므로 인자 추가 불필요.
+val 40개가 train 300개의 약 14%(전이쌍 기준)라 에폭당 시간이 조금(대략 10~15%) 늘어날
+수 있다 — [미확인, 실측 전]. 끝나면 `runs/<run_id>/ckpt_best.pt`를
+`scripts/run_rollout_comparison.py`로 재평가해 `ckpt_last.pt`(과적합 의심)와 비교한다.

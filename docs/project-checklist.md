@@ -190,11 +190,21 @@ node_block이 번갈아 쌓임)라 레이어 12개는 **`processor_size=6`**이 
   에폭 1번에 약 2.8~5.5시간 — 3시간 예산을 1에폭도 못 채움. **[GPU 팀원]** 아래 "GPU 실행
   방법" 참고해 실제 실행·체크포인트 생성.
 
-  **GPU 실행 방법**: `PYTHONPATH=src python -m etchpipe.train.train_main configs/model/mgn_v1.yaml --device cuda --time-budget-hours 3`
+  **업데이트(2026-11-10)**: 사용자가 Colab GPU로 실제 100에폭 학습을 완료했는데, val
+  롤아웃 평가(`run_rollout_comparison.py`)에서 5에폭 미수렴 초안보다 Chamfer·깊이오차가
+  둘 다 나쁘게 나옴(`reports/model_issues_mgn.md` 문제①, `reports/evidence/
+  W4-06_rollout_vs_baseline.md`) — `run_training`이 val 없이 마지막 에폭만 저장해 과적합
+  에폭을 못 걸러낸 것으로 보임. `train_main.py`에 val 평가+`ckpt_best.pt`(val 기준 최소
+  손실) 저장 추가(신규 테스트 2건, `tests/unit` 97 passed) — 증거:
+  `reports/evidence/W4-04_train_main_wiring.md` "업데이트(2026-11-10)". **[GPU 팀원]**
+  이 코드로 재학습 후 `ckpt_best.pt`를 재평가해 실제로 나아졌는지 확인 필요(아직 미실행).
+
+  **GPU 실행 방법**: `PYTHONPATH=src python -m etchpipe.train.train_main configs/model/mgn_v1.yaml --device cuda --time-budget-hours 3.5`
+  (val 자동 포함, `--val-every`로 주기 조정 가능)
   데이터: `data/processed/4b8c0ce1bc98/{graphs/,stats.json}`(W3-04), `data/splits.json`(train
-  300개). 출력: `runs/<run_id>/{config.yaml, git_sha, packages.json, metrics.json,
-  ckpt_last.pt}`. `configs/model/mgn_v1.yaml`의 `train.lr=0.0001`/`epochs=100`은 [미확인:
-  재검토 전 기본값] — GPU 체감 속도 보고 조정 가능(사용자 확인 후).
+  300개, val 40개). 출력: `runs/<run_id>/{config.yaml, git_sha, packages.json, metrics.json,
+  ckpt_last.pt, ckpt_best.pt}`. `configs/model/mgn_v1.yaml`의 `train.lr=0.0001`/`epochs=100`
+  은 [미확인: 재검토 전 기본값] — GPU 체감 속도 보고 조정 가능(사용자 확인 후).
 - [ ] W4-05 롤아웃 v1(연결 유지, 법선·엣지 재계산, 재료 이전 값 유지): K스텝 예측, val 오차 기록
   — **[CPU/매핑] 완료(2026-11-09)**: `src/etchpipe/train/rollout.py`(`rollout`,
   `rollout_val_error`, `recompute_edge_features`, `recompute_normals`) 구현, 토이 모델로

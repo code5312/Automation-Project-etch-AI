@@ -42,6 +42,11 @@ def _load_model_a(ckpt_path: pathlib.Path) -> tuple[MeshGraphNetModel, str]:
     착각했던 첫 시도는 틀렸음)."""
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     sd = ckpt["state_dict"]
+    # train_main.py(W4-04)로 직접 학습한 체크포인트는 MeshGraphNetModel 래퍼 전체를
+    # model.state_dict()로 저장해서 키 앞에 "net."이 붙는다(팀원 원본 체크포인트는 접두사
+    # 없음) — 2026-11-10, 실제 체크포인트로 처음 로드해보다 발견. 둘 다 지원하도록 벗겨낸다.
+    if any(k.startswith("net.") for k in sd):
+        sd = {k.removeprefix("net."): v for k, v in sd.items()}
     n_layer_entries = 1 + max(
         int(k.split(".")[2])
         for k in sd

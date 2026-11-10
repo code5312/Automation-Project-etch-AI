@@ -95,6 +95,30 @@ def iter_transition_pairs(graphs_root, run_ids: list[str]) -> Iterator[dict[str,
             }
 
 
+def _norm_to_device(norm: NodeEdgeNorm | None, device: str) -> NodeEdgeNorm | None:
+    if norm is None:
+        return None
+    return NodeEdgeNorm(
+        node_mean=norm.node_mean.to(device),
+        node_std=norm.node_std.to(device),
+        edge_mean=norm.edge_mean.to(device),
+        edge_std=norm.edge_std.to(device),
+    )
+
+
+def _prepare_pair(
+    pair: dict[str, torch.Tensor], norm_dev: NodeEdgeNorm | None, device: str
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    node = pair["node"].to(device)
+    edge_index = pair["edge_index"].to(device)
+    edge = pair["edge"].to(device)
+    pos = pair["pos"].to(device)
+    true_pos_next = pair["true_pos_next"].to(device)
+    node_in = normalize_node(node, norm_dev) if norm_dev is not None else node
+    edge_in = normalize_edge(edge, norm_dev) if norm_dev is not None else edge
+    return node_in, edge_index, edge_in, pos, true_pos_next
+
+
 def train_one_epoch(
     model: GraphDisplacementModel,
     optimizer: torch.optim.Optimizer,
@@ -110,25 +134,10 @@ def train_one_epoch(
     `train_main.run_training`이 루프 시작 전 한 번 `model.to(device)`). "cpu"는 기존과
     동일(무연산 `.to`)해 하위 호환. 평균 손실을 반환."""
     total, n = 0.0, 0
-    norm_dev = (
-        NodeEdgeNorm(
-            node_mean=norm.node_mean.to(device),
-            node_std=norm.node_std.to(device),
-            edge_mean=norm.edge_mean.to(device),
-            edge_std=norm.edge_std.to(device),
-        )
-        if norm is not None
-        else None
-    )
+    norm_dev = _norm_to_device(norm, device)
     for pair in iter_transition_pairs(graphs_root, run_ids):
         optimizer.zero_grad()
-        node = pair["node"].to(device)
-        edge_index = pair["edge_index"].to(device)
-        edge = pair["edge"].to(device)
-        pos = pair["pos"].to(device)
-        true_pos_next = pair["true_pos_next"].to(device)
-        node_in = normalize_node(node, norm_dev) if norm_dev is not None else node
-        edge_in = normalize_edge(edge, norm_dev) if norm_dev is not None else edge
+        node_in, edge_index, edge_in, pos, true_pos_next = _prepare_pair(pair, norm_dev, device)
         disp = model(node_in, edge_index, edge_in)
         pred_pos = pos + disp
         loss = chamfer_loss(pred_pos, true_pos_next)
@@ -136,4 +145,31 @@ def train_one_epoch(
         optimizer.step()
         total += float(loss.detach())
         n += 1
+    return total / max(n, 1)
+
+
+@torch.no_grad()
+def evaluate(
+    model: GraphDisplacementModel,
+    graphs_root,
+    run_ids: list[str],
+    norm: NodeEdgeNorm | None = None,
+    device: str = "cpu",
+) -> float:
+    """`train_one_epoch`과 같은 teacher-forcing 손실을 역전파 없이 계산한다(W4-04,
+    `train_main.run_training`이 매 에폭 val 체크포인트 선택에 씀). `model.eval()`로 전환하고
+    끝나면 원래 모드(`training`/`eval`)로 되돌린다."""
+    was_training = model.training
+    model.eval()
+    norm_dev = _norm_to_device(norm, device)
+    total, n = 0.0, 0
+    for pair in iter_transition_pairs(graphs_root, run_ids):
+        node_in, edge_index, edge_in, pos, true_pos_next = _prepare_pair(pair, norm_dev, device)
+        disp = model(node_in, edge_index, edge_in)
+        pred_pos = pos + disp
+        loss = chamfer_loss(pred_pos, true_pos_next)
+        total += float(loss)
+        n += 1
+    if was_training:
+        model.train()
     return total / max(n, 1)
