@@ -234,8 +234,18 @@ node_block이 번갈아 쌓임)라 레이어 12개는 **`processor_size=6`**이 
 
 ## 5주차: 평가·게이트·레지스트리 (증거 ①)
 
-- [ ] W5-01 지표 전체 구현: IoU, CD_top/mid/bot, taper, bowing, latency + 스텝 5·10·20 보고 → FR-07 / 단위 테스트 전부 통과
-- [ ] W5-02 `eval.py`: 체크포인트 + `dataset_hash` → `metrics.json`, 그림 PNG(예측 vs 정답 오버레이), 결정적, 하드웨어·시드 기록
+- [x] W5-01 지표 전체 구현: IoU, CD_top/mid/bot, taper, bowing, latency + 스텝 5·10·20 보고 → FR-07 / 단위 테스트 전부 통과
+  — **[CPU/매핑] 완료(2026-11-10)**: `src/etchpipe/eval/metrics.py`에 `mask_from_points`/
+  `mask_from_sdf`(설계서 §3 C4 "공정 비교" — 모델 A/B를 같은 래스터 마스크로 변환해 공통
+  기준으로 계산), `iou`, `cd_at_y`/`cd_profile`(top/mid/bot), `taper_angle_deg`, `bowing`,
+  `measure_latency` 추가. `src/etchpipe/train/rollout.py`에 `rollout_val_error_by_step`
+  추가(스텝 5·10·20별 보고, `rollout_val_error`는 그 위에 얇은 래퍼로 재구성) — 증거:
+  `reports/evidence/W5-01_metrics.md`.
+- [x] W5-02 `eval.py`: 체크포인트 + `dataset_hash` → `metrics.json`, 그림 PNG(예측 vs 정답 오버레이), 결정적, 하드웨어·시드 기록
+  — **[CPU/매핑] 완료(2026-11-10)**: `src/etchpipe/eval/eval.py`(`run_eval`, `load_model_a`,
+  CLI) 신규. 스텝 5·10·20(및 최종) 지표, `plots/<run_id>.png`, `git_sha`/패키지/하드웨어/
+  시드를 `metrics.json`에 기록. 실제 epoch=99 체크포인트로 val 40개 끝까지 돌려서 확인
+  — 증거: `reports/evidence/W5-02_eval.md`.
 - [ ] W5-03 OOD 20개 평가 → 별도 표
 - [ ] W5-04 게이트 임계값 산출: 첫 정상 모델 val 중앙값 Chamfer × 1.5 → `configs/pipeline/gate.yaml` 고정(변경 시 ADR) → 설계서 §3 C5
 - [ ] W5-05 게이트 완성: 항목 1~4, 챔피언 없음 케이스, `gate_result.json`

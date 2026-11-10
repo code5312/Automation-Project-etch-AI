@@ -12,6 +12,10 @@ reports/*
 # git status에 잡혀 섞여 들어갈 수 있다(2026-11-03, 중단한 xargs 스파이크의 잔여 로그가
 # 실제로 이렇게 재생성된 적 있음). 증거는 .md 요약이지 원본 로그가 아니므로 막아둔다.
 reports/evidence/*.raw.log
+# 모델별 문제 추적 로그(2026-11-10부터 계속 갱신, reports/evidence와 별개) — reports/*에
+# 가려 git status에 전혀 안 잡히던 버그를 오늘 발견해서 예외 추가.
+!reports/model_issues_mgn.md
+!reports/model_issues_fno.md
 
 # 대용량 메시 (golden/·tests/fixtures/는 예외)
 *.vtp

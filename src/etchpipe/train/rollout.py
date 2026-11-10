@@ -87,6 +87,36 @@ def rollout(
     return positions
 
 
+def rollout_val_error_by_step(
+    model,
+    graphs_root,
+    run_id: str,
+    steps: list[int],
+    step_min: float,
+    norm: NodeEdgeNorm | None = None,
+) -> dict[int, dict[str, float]]:
+    """`g000.npz`(t=0)에서 `max(steps)`까지 롤아웃하고, `steps`의 각 스텝에서 실제
+    `g<step>.npz`와 비교(W5-01, 설계서 C4 "스텝 5·10·20 보고") — 최종 스텝만 보면
+    중간에 오차가 급증했다가 다시 줄어드는 패턴을 놓칠 수 있다
+    (`reports/model_issues_mgn.md` "판단 기준" 3번)."""
+    root = Path(graphs_root) / run_id
+    g0 = load_graph(root / "g000.npz")
+    max_step = max(steps)
+
+    positions = rollout(
+        model, g0["node"], g0["edge_index"], g0["edge"], g0["pos"], max_step, step_min, norm
+    )
+    result: dict[int, dict[str, float]] = {}
+    for s in steps:
+        true_s = load_graph(root / f"g{s:03d}.npz")["pos"].numpy()
+        pred_s = positions[s].numpy()
+        result[s] = {
+            "chamfer": chamfer_distance(pred_s, true_s),
+            "depth_error": depth_error(pred_s, true_s),
+        }
+    return result
+
+
 def rollout_val_error(
     model,
     graphs_root,
@@ -96,15 +126,6 @@ def rollout_val_error(
     norm: NodeEdgeNorm | None = None,
 ) -> dict[str, float]:
     """`g000.npz`(t=0)에서 `n_steps` 롤아웃한 마지막 예측을 실제 `g<n_steps>.npz`와 비교."""
-    root = Path(graphs_root) / run_id
-    g0 = load_graph(root / "g000.npz")
-    true_final = load_graph(root / f"g{n_steps:03d}.npz")["pos"].numpy()
-
-    positions = rollout(
-        model, g0["node"], g0["edge_index"], g0["edge"], g0["pos"], n_steps, step_min, norm
-    )
-    pred_final = positions[-1].numpy()
-    return {
-        "chamfer": chamfer_distance(pred_final, true_final),
-        "depth_error": depth_error(pred_final, true_final),
-    }
+    return rollout_val_error_by_step(model, graphs_root, run_id, [n_steps], step_min, norm)[
+        n_steps
+    ]

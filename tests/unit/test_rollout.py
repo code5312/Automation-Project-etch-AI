@@ -11,6 +11,7 @@ from etchpipe.train.rollout import (
     recompute_normals,
     rollout,
     rollout_val_error,
+    rollout_val_error_by_step,
 )
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "raw"
@@ -135,3 +136,33 @@ def test_rollout_val_error_runs_on_real_fixture_graphs(tmp_path: pathlib.Path) -
     assert set(result) == {"chamfer", "depth_error"}
     assert result["chamfer"] >= 0.0
     assert result["depth_error"] >= 0.0
+
+
+def test_rollout_val_error_by_step_reports_each_requested_step(tmp_path: pathlib.Path) -> None:
+    graphs_root = tmp_path / "graphs"
+    etl_run(FIXTURES / "r0000", graphs_root / "r0000", THETA_KEYS)
+
+    torch.manual_seed(0)
+    model = ToyNodeMLP()
+    result = rollout_val_error_by_step(model, graphs_root, "r0000", steps=[1, 2, 3], step_min=1.0)
+
+    assert set(result) == {1, 2, 3}
+    for s in (1, 2, 3):
+        assert set(result[s]) == {"chamfer", "depth_error"}
+        assert result[s]["chamfer"] >= 0.0
+
+
+def test_rollout_val_error_by_step_matches_rollout_val_error_at_same_step(
+    tmp_path: pathlib.Path,
+) -> None:
+    graphs_root = tmp_path / "graphs"
+    etl_run(FIXTURES / "r0000", graphs_root / "r0000", THETA_KEYS)
+
+    torch.manual_seed(0)
+    model = ToyNodeMLP()
+    single = rollout_val_error(model, graphs_root, "r0000", n_steps=3, step_min=1.0)
+    torch.manual_seed(0)
+    model = ToyNodeMLP()
+    by_step = rollout_val_error_by_step(model, graphs_root, "r0000", steps=[3], step_min=1.0)
+
+    assert single == by_step[3]
