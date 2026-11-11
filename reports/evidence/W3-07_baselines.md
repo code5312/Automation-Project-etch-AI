@@ -38,7 +38,7 @@ python -m ruff check src/etchpipe/models/baseline.py tests/unit/test_baseline.py
 All checks passed!
 ```
 
-## 실제 val(40건) 평가 결과 [확인]
+## 실제 val(40건) 평가 결과 [확인, 구 Chamfer 정의 — 아래 "업데이트" 참고]
 
 ```
 python scripts/run_baselines.py
@@ -63,3 +63,32 @@ python scripts/run_baselines.py
 - W4-06(롤아웃 오차 vs 베이스라인 비교표)에서 이 두 값을 그대로 비교 기준으로 쓸 수 있다.
 - D4 판정("val 최종 스텝 Chamfer가 베이스라인 (b)보다 작으면 통과")의 기준값은 Chamfer
   평균 8.552(또는 중앙값 9.133) [확인: 실측값, 어느 쪽을 기준으로 할지는 W4에서 결정].
+
+## 업데이트(2026-11-11): ADR-0004 Chamfer 정의 교체로 재계산 [확인, 1차 — 아래 2차로 대체]
+
+`eval/metrics.py::chamfer_distance`가 점-점(cKDTree, 합)에서 점-선분(densify, 평균÷2)
+방식으로 바뀌어(`docs/adr/0004-golden-scoring-chamfer-and-gate.md`), **위 Chamfer 수치는
+전부 무효**. `depth_error`는 영향 없음(그대로). 같은 스크립트(`scripts/run_baselines.py`)
+를 다시 돌려 `reports/evidence/W3-07_baseline_metrics.json`을 새 값으로 덮어썼다:
+
+| 베이스라인 | Chamfer 평균 | Chamfer 중앙값 | 깊이오차 평균(µm) | 깊이오차 중앙값(µm) |
+|---|---|---|---|---|
+| (a) 변위 0 | 7.700 | 9.318 | 40.964 | 49.793 |
+| (b) 깊이 MLP+직선 외삽 | 0.590 | 0.582 | 2.397 | 1.910 |
+
+## 업데이트(2026-11-11, 2차): outer_path 필터링 누락 수정 [확인 — 최종]
+
+위 1차 재계산도 **원본 메시 점 배열을 그대로 `chamfer_distance`에 넘기는 버그**가
+있었음을 발견 — `load_snapshot`의 점 배열은 마스크/Si 내부 경계가 섞여 순서가 안
+맞는 부분이 있는데(실측: r0000 254개 선분 중 174개만 연속 인덱스), ADR-0004의
+점-선분 Chamfer는 **표면을 따라 순서대로 연결된 곡선**을 가정한다. `scripts/
+run_baselines.py`를 `etl.outer_path`로 표면선만 추출하도록 수정 후 재실행:
+
+| 베이스라인 | Chamfer 평균 | Chamfer 중앙값 | 깊이오차 평균(µm) | 깊이오차 중앙값(µm) |
+|---|---|---|---|---|
+| (a) 변위 0 | 8.143 | 9.620 | 40.964 | 49.793 |
+| (b) 깊이 MLP+직선 외삽 | **0.438** | **0.351** | 2.397 | 1.910 |
+
+**새 D4 판정 기준값은 Chamfer 평균 0.438(또는 중앙값 0.351)** — 위 "구 정의"
+8.552/9.133과 "1차 재계산" 0.590/0.582는 역사적 기록으로 남겨두고 이 표로 대체한다.
+`depth_error`는 `outer_path` 적용 여부와 무관(그대로, `depth()`가 순서에 안 의존).

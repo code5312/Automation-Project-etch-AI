@@ -39,6 +39,15 @@ def test_random_model_does_not_block_alone_since_rule1_is_reference_only() -> No
     assert result.reference_metrics["golden_chamfer"]["within_max"] is False
 
 
+def test_empty_golden_pairs_skips_rule1_without_crashing() -> None:
+    # W5-06 2026-11-12: 실모델(GNN rollout) gate-negative 테스트는 더미 모델 전용
+    # `model.predict(pos)` 인터페이스에 맞는 골든 어댑터가 없어 golden_pairs=[]로
+    # run_gate를 호출한다 — ①은 참고 지표일 뿐이라 건너뛰어도 passed에 영향 없어야 한다.
+    result = run_gate(ZeroDisplacementModel(), [], max_chamfer=0.1)
+    assert result.passed is True
+    assert "golden_chamfer" not in result.reference_metrics
+
+
 def test_dataset_hash_mismatch_blocks_exit_code_2() -> None:
     result = run_gate(
         ZeroDisplacementModel(), GOLDEN_PAIRS, max_chamfer=0.1,

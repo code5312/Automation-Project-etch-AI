@@ -18,6 +18,7 @@ from etchpipe.etl.etl import (
     metrics,
     outer_path,
     process_dataset,
+    remove_self_crossing_loops,
     signed_dist_field,
     to_graph,
     validate_dataset,
@@ -60,6 +61,18 @@ def test_outer_path_extracts_open_chain_and_ignores_side_branch() -> None:
     lines = np.array([[0, 1], [1, 2], [2, 3], [1, 4]])
     path = outer_path(points, lines)
     np.testing.assert_allclose(path, points[[0, 1, 2, 3]])
+
+
+def test_remove_self_crossing_loops_replaces_crossing_with_intersection_point() -> None:
+    # 나비 모양 구간: (0,0)-(2,2) 선분과 (2,0)-(0,2) 선분이 (1,1)에서 교차한다.
+    curve = np.array([[0.0, 0.0], [2.0, 2.0], [2.0, 0.0], [0.0, 2.0], [4.0, 2.0]])
+    fixed = remove_self_crossing_loops(curve)
+    np.testing.assert_allclose(fixed, [[0.0, 0.0], [1.0, 1.0], [0.0, 2.0], [4.0, 2.0]])
+
+
+def test_remove_self_crossing_loops_no_op_when_no_crossing() -> None:
+    curve = np.array([[0.0, 0.0], [1.0, -1.0], [2.0, 0.0]])
+    np.testing.assert_allclose(remove_self_crossing_loops(curve), curve)
 
 
 def test_to_graph_material_onehot_matches_w1_s5_mapping() -> None:

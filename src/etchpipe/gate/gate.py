@@ -188,13 +188,17 @@ def run_gate(
     reasons: list[str] = []
     reference_metrics: dict = {}
 
-    # ① 참고 지표만 (ADR-0004 결정2)
-    ok1, mean_chamfer = check_golden_chamfer(model, golden_pairs, max_chamfer)
-    reference_metrics["golden_chamfer"] = {
-        "mean": mean_chamfer,
-        "max_chamfer": max_chamfer,
-        "within_max": ok1,
-    }
+    # ① 참고 지표만 (ADR-0004 결정2). golden_pairs가 비어 있으면 건너뛴다 [확인,
+    # W5-06 2026-11-12 — 실모델(GNN rollout) 기준 gate-negative 테스트는 `model.predict
+    # (pos)` 단순 호출(더미 모델 전용 인터페이스)에 맞는 골든 어댑터가 아직 없어서 ①을
+    # 아예 안 넘긴다. 참고 지표일 뿐 `passed`에는 어차피 영향 없으니 안전한 생략.
+    if golden_pairs:
+        ok1, mean_chamfer = check_golden_chamfer(model, golden_pairs, max_chamfer)
+        reference_metrics["golden_chamfer"] = {
+            "mean": mean_chamfer,
+            "max_chamfer": max_chamfer,
+            "within_max": ok1,
+        }
 
     # ② 깊이/CD 치수 오차 — 차단 (ADR-0004 결정2)
     ok2 = True

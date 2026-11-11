@@ -2,22 +2,22 @@
   "n_val": 40,
   "a_zero_displacement": {
     "chamfer": {
-      "mean": 14.463791038503121,
-      "median": 16.853776584513742
+      "mean": 8.143147988868266,
+      "median": 9.620410589664559
     },
     "depth_error": {
-      "mean": 40.964030544665,
-      "median": 49.792603628542565
+      "mean": 40.96413054466218,
+      "median": 49.79270362853974
     }
   },
   "b_depth_mlp_extrapolation": {
     "chamfer": {
-      "mean": 8.552477443905133,
-      "median": 9.132636963047062
+      "mean": 0.43791478901296477,
+      "median": 0.3511659467605093
     },
     "depth_error": {
-      "mean": 2.3974873304367064,
-      "median": 1.909703254699707
+      "mean": 2.3974918365478515,
+      "median": 1.9097986221313477
     }
   },
   "per_run": [
@@ -25,64 +25,64 @@
       "run_id": "r0300",
       "true_depth": 52.2,
       "a_zero_displacement": {
-        "chamfer": 17.62973468840638,
-        "depth_error": 52.13430704345956
+        "chamfer": 10.097641678604463,
+        "depth_error": 52.13440704345673
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 10.91230948069701,
-        "depth_error": 0.5166549682617188,
-        "pred_depth": 51.617652893066406
+        "chamfer": 0.22601708554749267,
+        "depth_error": 0.5167503356933594,
+        "pred_depth": 51.61765670776367
       }
     },
     {
       "run_id": "r0301",
       "true_depth": 32.1,
       "a_zero_displacement": {
-        "chamfer": 10.724212356186648,
-        "depth_error": 32.154101507570886
+        "chamfer": 6.093716383517302,
+        "depth_error": 32.15420150756806
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 5.814951101658254,
-        "depth_error": 0.08060073852539062,
-        "pred_depth": 32.234703063964844
+        "chamfer": 0.13383904211391937,
+        "depth_error": 0.08050537109375,
+        "pred_depth": 32.23470687866211
       }
     },
     {
       "run_id": "r0302",
       "true_depth": 37.2,
       "a_zero_displacement": {
-        "chamfer": 13.645097091758108,
-        "depth_error": 37.30739893188729
+        "chamfer": 7.6921905024720125,
+        "depth_error": 37.30749893188447
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 9.04345222778992,
-        "depth_error": 1.5697746276855469,
-        "pred_depth": 38.877174377441406
+        "chamfer": 0.49110328304812656,
+        "depth_error": 1.5696792602539062,
+        "pred_depth": 38.87717819213867
       }
     },
     {
       "run_id": "r0303",
       "true_depth": 51.6,
       "a_zero_displacement": {
-        "chamfer": 18.68482827798552,
-        "depth_error": 51.6888457702662
+        "chamfer": 10.42790562223918,
+        "depth_error": 51.68894577026337
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 9.279543107961652,
-        "depth_error": 1.7492179870605469,
-        "pred_depth": 49.93962860107422
+        "chamfer": 0.6806313892747949,
+        "depth_error": 1.7493057250976562,
+        "pred_depth": 49.939640045166016
       }
     },
     {
       "run_id": "r0304",
       "true_depth": 51.9,
       "a_zero_displacement": {
-        "chamfer": 19.007092437102358,
-        "depth_error": 51.85070337524667
+        "chamfer": 10.400476910904196,
+        "depth_error": 51.85080337524384
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 8.998967312279225,
-        "depth_error": 3.5284194946289062,
+        "chamfer": 0.34037866143781115,
+        "depth_error": 3.5285186767578125,
         "pred_depth": 48.32228469848633
       }
     },
@@ -90,116 +90,116 @@
       "run_id": "r0305",
       "true_depth": 30.9,
       "a_zero_displacement": {
-        "chamfer": 8.956927879563775,
-        "depth_error": 30.970494406130456
+        "chamfer": 5.301121169211317,
+        "depth_error": 30.97059440612763
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 6.298350662471719,
-        "depth_error": 2.947751998901367,
-        "pred_depth": 28.022743225097656
+        "chamfer": 0.24021573153434383,
+        "depth_error": 2.947843551635742,
+        "pred_depth": 28.022750854492188
       }
     },
     {
       "run_id": "r0306",
       "true_depth": 21.3,
       "a_zero_displacement": {
-        "chamfer": 6.107676507069378,
-        "depth_error": 21.38255228271737
+        "chamfer": 3.624013488155896,
+        "depth_error": 21.382652282714545
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 4.943819140178221,
-        "depth_error": 0.6184539794921875,
-        "pred_depth": 22.001007080078125
+        "chamfer": 0.1831525003793606,
+        "depth_error": 0.6183567047119141,
+        "pred_depth": 22.001008987426758
       }
     },
     {
       "run_id": "r0307",
       "true_depth": 52.5,
       "a_zero_displacement": {
-        "chamfer": 20.851409499348655,
-        "depth_error": 52.39493479004159
+        "chamfer": 11.535409042303717,
+        "depth_error": 52.395034790038764
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 9.824223419767263,
-        "depth_error": 1.5055618286132812,
-        "pred_depth": 50.889373779296875
+        "chamfer": 1.0016893142288636,
+        "depth_error": 1.5056495666503906,
+        "pred_depth": 50.88938522338867
       }
     },
     {
       "run_id": "r0308",
       "true_depth": 56.4,
       "a_zero_displacement": {
-        "chamfer": 22.620457634694127,
-        "depth_error": 56.310614721682214
+        "chamfer": 12.171750544819158,
+        "depth_error": 56.31071472167939
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 11.873591543041702,
-        "depth_error": 1.4723625183105469,
-        "pred_depth": 57.78297805786133
+        "chamfer": 0.9080700339584697,
+        "depth_error": 1.4722671508789062,
+        "pred_depth": 57.782981872558594
       }
     },
     {
       "run_id": "r0309",
       "true_depth": 20.7,
       "a_zero_displacement": {
-        "chamfer": 5.5001684303346785,
-        "depth_error": 20.656426565554284
+        "chamfer": 3.480908090901256,
+        "depth_error": 20.65652656555146
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 4.9296628289922,
-        "depth_error": 1.7728004455566406,
-        "pred_depth": 18.88362693786621
+        "chamfer": 0.13840587710296248,
+        "depth_error": 1.7728958129882812,
+        "pred_depth": 18.883630752563477
       }
     },
     {
       "run_id": "r0310",
       "true_depth": 53.1,
       "a_zero_displacement": {
-        "chamfer": 18.374172090423297,
-        "depth_error": 53.07229913940682
+        "chamfer": 10.148503043526606,
+        "depth_error": 53.072399139404
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 10.45937391876367,
-        "depth_error": 0.7343597412109375,
-        "pred_depth": 52.33794021606445
+        "chamfer": 0.6128376101005973,
+        "depth_error": 0.7344512939453125,
+        "pred_depth": 52.337947845458984
       }
     },
     {
       "run_id": "r0311",
       "true_depth": 10.2,
       "a_zero_displacement": {
-        "chamfer": 2.64669502038603,
-        "depth_error": 10.16572870483651
+        "chamfer": 1.6897064294817814,
+        "depth_error": 10.165828704833684
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 5.399757120104049,
-        "depth_error": 3.937777519226074,
-        "pred_depth": 14.103506088256836
+        "chamfer": 0.6201526075273709,
+        "depth_error": 3.937678337097168,
+        "pred_depth": 14.103507041931152
       }
     },
     {
       "run_id": "r0312",
       "true_depth": 51.9,
       "a_zero_displacement": {
-        "chamfer": 19.721977673693114,
-        "depth_error": 51.9899817871119
+        "chamfer": 10.774822437541047,
+        "depth_error": 51.99008178710908
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 10.24486504171803,
-        "depth_error": 0.18827438354492188,
-        "pred_depth": 52.17825698852539
+        "chamfer": 0.566317241278277,
+        "depth_error": 0.1881866455078125,
+        "pred_depth": 52.17826843261719
       }
     },
     {
       "run_id": "r0313",
       "true_depth": 31.5,
       "a_zero_displacement": {
-        "chamfer": 10.020035949196405,
-        "depth_error": 31.389962332155847
+        "chamfer": 5.978057422462576,
+        "depth_error": 31.390062332153022
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 6.314366380419132,
-        "depth_error": 3.3055782318115234,
+        "chamfer": 0.33624965629890197,
+        "depth_error": 3.3056774139404297,
         "pred_depth": 28.08438491821289
       }
     },
@@ -207,12 +207,12 @@
       "run_id": "r0314",
       "true_depth": 25.5,
       "a_zero_displacement": {
-        "chamfer": 6.467607916925607,
-        "depth_error": 25.537112371828698
+        "chamfer": 3.838300061407399,
+        "depth_error": 25.537212371825873
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 10.775005610030368,
-        "depth_error": 10.571514129638672,
+        "chamfer": 1.0509109930460179,
+        "depth_error": 10.571414947509766,
         "pred_depth": 36.10862731933594
       }
     },
@@ -220,25 +220,25 @@
       "run_id": "r0315",
       "true_depth": 51.6,
       "a_zero_displacement": {
-        "chamfer": 20.329978867690137,
-        "depth_error": 51.70251383056893
+        "chamfer": 11.292857919412448,
+        "depth_error": 51.70261383056611
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 9.221821698304206,
-        "depth_error": 2.257251739501953,
-        "pred_depth": 49.44526290893555
+        "chamfer": 0.40233204006128404,
+        "depth_error": 2.2573394775390625,
+        "pred_depth": 49.445274353027344
       }
     },
     {
       "run_id": "r0316",
       "true_depth": 52.5,
       "a_zero_displacement": {
-        "chamfer": 18.81151965849451,
-        "depth_error": 52.624472753908776
+        "chamfer": 10.475413858537783,
+        "depth_error": 52.62457275390595
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 9.98579557220543,
-        "depth_error": 0.20949935913085938,
+        "chamfer": 0.16540995144555862,
+        "depth_error": 0.20940017700195312,
         "pred_depth": 52.8339729309082
       }
     },
@@ -246,25 +246,25 @@
       "run_id": "r0317",
       "true_depth": 18.0,
       "a_zero_displacement": {
-        "chamfer": 4.706158810605902,
-        "depth_error": 18.136672155764245
+        "chamfer": 2.863479745484613,
+        "depth_error": 18.13677215576142
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 4.495351530404326,
-        "depth_error": 2.0466060638427734,
-        "pred_depth": 16.09006690979004
+        "chamfer": 0.19432947402856698,
+        "depth_error": 2.046701431274414,
+        "pred_depth": 16.090070724487305
       }
     },
     {
       "run_id": "r0318",
       "true_depth": 49.5,
       "a_zero_displacement": {
-        "chamfer": 16.113365672958896,
-        "depth_error": 49.440104620363854
+        "chamfer": 9.224228341868708,
+        "depth_error": 49.44020462036103
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 8.757051192364859,
-        "depth_error": 5.22003173828125,
+        "chamfer": 0.3480897081544338,
+        "depth_error": 5.220130920410156,
         "pred_depth": 44.22007369995117
       }
     },
@@ -272,51 +272,51 @@
       "run_id": "r0319",
       "true_depth": 51.9,
       "a_zero_displacement": {
-        "chamfer": 21.602677814812314,
-        "depth_error": 51.9993926452662
+        "chamfer": 11.94703957607397,
+        "depth_error": 51.99949264526337
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 9.434984299972777,
-        "depth_error": 5.981361389160156,
-        "pred_depth": 46.01803207397461
+        "chamfer": 0.574854568732029,
+        "depth_error": 5.981452941894531,
+        "pred_depth": 46.01803970336914
       }
     },
     {
       "run_id": "r0320",
       "true_depth": 51.6,
       "a_zero_displacement": {
-        "chamfer": 19.221308668645733,
-        "depth_error": 51.55514444580331
+        "chamfer": 10.856588277873403,
+        "depth_error": 51.55524444580048
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 12.344248232100682,
-        "depth_error": 2.7912979125976562,
-        "pred_depth": 54.34644317626953
+        "chamfer": 0.3542421853665848,
+        "depth_error": 2.791210174560547,
+        "pred_depth": 54.34645462036133
       }
     },
     {
       "run_id": "r0321",
       "true_depth": 41.7,
       "a_zero_displacement": {
-        "chamfer": 13.801377026547408,
-        "depth_error": 41.59616770019784
+        "chamfer": 7.8513793467012745,
+        "depth_error": 41.596267700195014
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 7.535253661332733,
-        "depth_error": 3.566028594970703,
-        "pred_depth": 38.0301399230957
+        "chamfer": 0.47680419314371225,
+        "depth_error": 3.5661239624023438,
+        "pred_depth": 38.03014373779297
       }
     },
     {
       "run_id": "r0322",
       "true_depth": 47.4,
       "a_zero_displacement": {
-        "chamfer": 15.778902425241396,
-        "depth_error": 47.353034155275964
+        "chamfer": 9.010394413678675,
+        "depth_error": 47.35313415527314
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 8.798601488350018,
-        "depth_error": 4.237232208251953,
+        "chamfer": 0.3333001156688079,
+        "depth_error": 4.237331390380859,
         "pred_depth": 43.11580276489258
       }
     },
@@ -324,12 +324,12 @@
       "run_id": "r0323",
       "true_depth": 52.2,
       "a_zero_displacement": {
-        "chamfer": 19.960634977723824,
-        "depth_error": 52.1693030761744
+        "chamfer": 10.958587183491224,
+        "depth_error": 52.16940307617158
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 8.75239569810578,
-        "depth_error": 3.424407958984375,
+        "chamfer": 0.5630622185822874,
+        "depth_error": 3.4245071411132812,
         "pred_depth": 48.744895935058594
       }
     },
@@ -337,142 +337,142 @@
       "run_id": "r0324",
       "true_depth": 52.2,
       "a_zero_displacement": {
-        "chamfer": 19.839971191599545,
-        "depth_error": 52.07928385010018
+        "chamfer": 11.047653684989333,
+        "depth_error": 52.07938385009736
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 11.416766899227493,
-        "depth_error": 1.3375473022460938,
-        "pred_depth": 53.416831970214844
+        "chamfer": 0.3020671887450078,
+        "depth_error": 1.3374557495117188,
+        "pred_depth": 53.416839599609375
       }
     },
     {
       "run_id": "r0325",
       "true_depth": 12.3,
       "a_zero_displacement": {
-        "chamfer": 2.8260390668657047,
-        "depth_error": 12.252319471743249
+        "chamfer": 1.7749189641860226,
+        "depth_error": 12.252419471740422
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 3.6302961590719987,
-        "depth_error": 0.4616670608520508,
-        "pred_depth": 12.71398639678955
+        "chamfer": 0.11431927034181424,
+        "depth_error": 0.46157073974609375,
+        "pred_depth": 12.713990211486816
       }
     },
     {
       "run_id": "r0326",
       "true_depth": 51.3,
       "a_zero_displacement": {
-        "chamfer": 18.246614948151002,
-        "depth_error": 51.37149347534432
+        "chamfer": 10.348064897067353,
+        "depth_error": 51.3715934753415
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 9.713754667498087,
-        "depth_error": 4.154747009277344,
-        "pred_depth": 47.21674728393555
+        "chamfer": 0.9089204403817264,
+        "depth_error": 4.154838562011719,
+        "pred_depth": 47.21675491333008
       }
     },
     {
       "run_id": "r0327",
       "true_depth": 31.8,
       "a_zero_displacement": {
-        "chamfer": 10.922945182192143,
-        "depth_error": 31.708136694338464
+        "chamfer": 6.351257613070764,
+        "depth_error": 31.70823669433564
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 6.342740258766241,
-        "depth_error": 0.7948875427246094,
-        "pred_depth": 32.50302505493164
+        "chamfer": 0.2335445396685183,
+        "depth_error": 0.7947921752929688,
+        "pred_depth": 32.503028869628906
       }
     },
     {
       "run_id": "r0328",
       "true_depth": 50.1,
       "a_zero_displacement": {
-        "chamfer": 20.451373805870276,
-        "depth_error": 50.16134943237557
+        "chamfer": 10.924622199480497,
+        "depth_error": 50.16144943237275
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 11.070219748831306,
-        "depth_error": 1.1133537292480469,
-        "pred_depth": 51.27470397949219
+        "chamfer": 0.9585441101911851,
+        "depth_error": 1.1132659912109375,
+        "pred_depth": 51.274715423583984
       }
     },
     {
       "run_id": "r0329",
       "true_depth": 13.8,
       "a_zero_displacement": {
-        "chamfer": 2.781975921357531,
-        "depth_error": 13.7865544723536
+        "chamfer": 1.7331450013314293,
+        "depth_error": 13.786654472350774
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 3.9077363461159846,
-        "depth_error": 0.37657642364501953,
-        "pred_depth": 13.409977912902832
+        "chamfer": 0.07954231530153885,
+        "depth_error": 0.37667369842529297,
+        "pred_depth": 13.409980773925781
       }
     },
     {
       "run_id": "r0330",
       "true_depth": 46.5,
       "a_zero_displacement": {
-        "chamfer": 16.2764587207584,
-        "depth_error": 46.378832952883386
+        "chamfer": 9.24589634930049,
+        "depth_error": 46.37893295288056
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 11.85890675632767,
-        "depth_error": 3.1213645935058594,
-        "pred_depth": 49.50019836425781
+        "chamfer": 0.4141130027350457,
+        "depth_error": 3.1212692260742188,
+        "pred_depth": 49.50020217895508
       }
     },
     {
       "run_id": "r0331",
       "true_depth": 51.0,
       "a_zero_displacement": {
-        "chamfer": 18.575889947699974,
-        "depth_error": 51.14615549316659
+        "chamfer": 10.274442950805346,
+        "depth_error": 51.146255493163764
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 9.422679118012212,
-        "depth_error": 0.6660995483398438,
-        "pred_depth": 50.48005676269531
+        "chamfer": 0.26811013270410206,
+        "depth_error": 0.6661949157714844,
+        "pred_depth": 50.48006057739258
       }
     },
     {
       "run_id": "r0332",
       "true_depth": 54.0,
       "a_zero_displacement": {
-        "chamfer": 21.720529531530683,
-        "depth_error": 54.11749185791268
+        "chamfer": 11.921598222919961,
+        "depth_error": 54.11759185790986
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 10.013062315784307,
-        "depth_error": 3.5070533752441406,
-        "pred_depth": 50.61043930053711
+        "chamfer": 0.3246997932895205,
+        "depth_error": 3.5071449279785156,
+        "pred_depth": 50.61044692993164
       }
     },
     {
       "run_id": "r0333",
       "true_depth": 41.1,
       "a_zero_displacement": {
-        "chamfer": 12.504307686453274,
-        "depth_error": 40.989447729494714
+        "chamfer": 7.2826023999588205,
+        "depth_error": 40.98954772949189
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 7.784272091321723,
-        "depth_error": 3.13226318359375,
-        "pred_depth": 37.85718536376953
+        "chamfer": 0.35845871123132395,
+        "depth_error": 3.1323585510253906,
+        "pred_depth": 37.8571891784668
       }
     },
     {
       "run_id": "r0334",
       "true_depth": 24.0,
       "a_zero_displacement": {
-        "chamfer": 7.04008235214945,
-        "depth_error": 24.126891271975182
+        "chamfer": 4.259632382238951,
+        "depth_error": 24.126991271972358
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 7.293058276317089,
-        "depth_error": 3.9126110076904297,
+        "chamfer": 0.4283928112350821,
+        "depth_error": 3.9125118255615234,
         "pred_depth": 28.03950309753418
       }
     },
@@ -480,25 +480,25 @@
       "run_id": "r0335",
       "true_depth": 51.3,
       "a_zero_displacement": {
-        "chamfer": 18.95183490605825,
-        "depth_error": 51.443312780764245
+        "chamfer": 10.502261874695325,
+        "depth_error": 51.44341278076142
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 8.375868185045977,
-        "depth_error": 4.114437103271484,
-        "pred_depth": 47.32887649536133
+        "chamfer": 0.8033282066981573,
+        "depth_error": 4.114524841308594,
+        "pred_depth": 47.328887939453125
       }
     },
     {
       "run_id": "r0336",
       "true_depth": 53.1,
       "a_zero_displacement": {
-        "chamfer": 17.431094448269086,
-        "depth_error": 53.11515726318612
+        "chamfer": 9.994924830028628,
+        "depth_error": 53.115257263183295
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 11.236748287714407,
-        "depth_error": 0.10786056518554688,
+        "chamfer": 0.2978247686406063,
+        "depth_error": 0.10776138305664062,
         "pred_depth": 53.223018646240234
       }
     },
@@ -506,39 +506,39 @@
       "run_id": "r0337",
       "true_depth": 40.5,
       "a_zero_displacement": {
-        "chamfer": 15.807453065425582,
-        "depth_error": 40.56843866577401
+        "chamfer": 8.834012509702847,
+        "depth_error": 40.568538665771186
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 10.450366674086464,
-        "depth_error": 3.310077667236328,
-        "pred_depth": 43.878517150878906
+        "chamfer": 0.5343197848673791,
+        "depth_error": 3.309986114501953,
+        "pred_depth": 43.87852478027344
       }
     },
     {
       "run_id": "r0338",
       "true_depth": 19.5,
       "a_zero_displacement": {
-        "chamfer": 5.880693730387219,
-        "depth_error": 19.588984625246667
+        "chamfer": 3.405009601331826,
+        "depth_error": 19.589084625243842
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 4.496152066300988,
-        "depth_error": 0.6535434722900391,
-        "pred_depth": 20.242528915405273
+        "chamfer": 0.23942466818205604,
+        "depth_error": 0.6534461975097656,
+        "pred_depth": 20.242530822753906
       }
     },
     {
       "run_id": "r0339",
       "true_depth": 50.1,
       "a_zero_displacement": {
-        "chamfer": 18.010359659562507,
-        "depth_error": 50.145102636721276
+        "chamfer": 10.091384582953028,
+        "depth_error": 50.14520263671845
       },
       "b_depth_mlp_extrapolation": {
-        "chamfer": 10.648727636770102,
-        "depth_error": 0.9025840759277344,
-        "pred_depth": 51.04768753051758
+        "chamfer": 0.3085863342449527,
+        "depth_error": 0.9025001525878906,
+        "pred_depth": 51.04770278930664
       }
     }
   ]

@@ -234,6 +234,45 @@ def outer_path(points: np.ndarray, lines: np.ndarray) -> np.ndarray:
     return points[np.array(path[::-1])]
 
 
+def _first_self_crossing(curve: np.ndarray) -> tuple[int, int] | None:
+    """`curve`(순서 있는 표면선)에서 서로 가로지르는, 인접하지 않은 첫 선분 쌍(i, i+1<j).
+    없으면 `None` [확인, mgn_tuned `inference.py`의 `first_cross` 그대로 포팅 — `eval.
+    metrics.self_intersection_count`와 같은 교차 판정식(side)을 재사용]."""
+
+    def side(p: np.ndarray, q: np.ndarray, r: np.ndarray) -> np.ndarray:
+        return np.sign(
+            (q[..., 0] - p[..., 0]) * (r[..., 1] - p[..., 1])
+            - (q[..., 1] - p[..., 1]) * (r[..., 0] - p[..., 0])
+        )
+
+    a, b = curve[:-1], curve[1:]
+    i, j = np.triu_indices(len(a), k=2)
+    hit = (side(a[i], b[i], a[j]) * side(a[i], b[i], b[j]) < 0) & (
+        side(a[j], b[j], a[i]) * side(a[j], b[j], b[i]) < 0
+    )
+    if not hit.any():
+        return None
+    pair = min(zip(i[hit].tolist(), j[hit].tolist()))
+    return pair
+
+
+def remove_self_crossing_loops(curve: np.ndarray, max_iter: int = 50) -> np.ndarray:
+    """자기교차 고리를 교차점 하나로 바꾼다(모델 출력 후처리, 정답은 안 씀) [확인,
+    ADR-0004 결정4 배선(2026-11-11) — mgn_tuned `inference.py`의 `remove_loops` 그대로
+    포팅]. 정답 비교에는 안 쓰고, 모델 예측 표면선을 채점 직전에만 다듬는다."""
+    for _ in range(max_iter):
+        hit = _first_self_crossing(curve)
+        if hit is None:
+            break
+        i, j = hit
+        p, r = curve[i], curve[i + 1] - curve[i]
+        q, s = curve[j], curve[j + 1] - curve[j]
+        den = r[0] * s[1] - r[1] * s[0]
+        t = ((q[0] - p[0]) * s[1] - (q[1] - p[1]) * s[0]) / den
+        curve = np.vstack([curve[: i + 1], (p + t * r)[None], curve[j + 1 :]])
+    return curve
+
+
 def metrics(p: np.ndarray) -> dict:
     # Si 윗면이 y=0 (MakeTrench 기본). 식각 깊이 = -ymin
     return {"depth": float(-p[:, 1].min()), "ymin": float(p[:, 1].min())}

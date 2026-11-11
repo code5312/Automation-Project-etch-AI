@@ -6,7 +6,9 @@ import numpy as np
 import torch
 from torch import nn
 
-from etchpipe.etl.etl import THETA_KEYS, etl_run, load_snapshot, to_graph
+from etchpipe.etl.etl import THETA_KEYS, etl_run, load_snapshot, outer_path, to_graph
+from etchpipe.eval.metrics import depth
+from etchpipe.train.loop import load_graph
 from etchpipe.train.rollout import (
     lines_from_edge_index,
     recompute_edge_features,
@@ -115,6 +117,68 @@ def test_rollout_material_carried_forward_via_cumulative_displacement() -> None:
     assert torch.allclose(positions[-1], expected_final, atol=1e-5)
 
 
+class ConstantDisplacementModel(nn.Module):
+    """항상 같은 변위를 모든 노드에 반환 — fix_mask/guard 검증용."""
+
+    def __init__(self, dx: float = 0.0, dy: float = 0.0) -> None:
+        super().__init__()
+        self.dx, self.dy = dx, dy
+
+    def forward(
+        self, node: torch.Tensor, edge_index: torch.Tensor, edge: torch.Tensor
+    ) -> torch.Tensor:
+        del edge_index, edge
+        return torch.tensor([[self.dx, self.dy]] * node.shape[0])
+
+
+def test_rollout_fix_mask_keeps_mask_nodes_in_place() -> None:
+    # ADR-0004 후속(2026-11-11): mgn_tuned inference.py의 마스크 고정 포팅.
+    pos0, edge_index = _line_geometry()
+    normal0 = torch.tensor([[0.0, 1.0]] * 3)
+    material0 = torch.tensor([[1.0, 0.0], [0.0, 1.0], [0.0, 1.0]])  # 점0=마스크, 1·2=Si
+    theta0 = torch.zeros((3, 7))
+    t0 = torch.zeros((3, 1))
+    node0 = torch.cat([pos0, normal0, material0, theta0, t0], dim=1)
+    edge0 = recompute_edge_features(pos0, edge_index)
+
+    positions = rollout(
+        ConstantDisplacementModel(dx=1.0), node0, edge_index, edge0, pos0, 2, 1.0, fix_mask=True
+    )
+    assert torch.allclose(positions[-1][0], pos0[0])  # 마스크 노드는 안 움직임
+    assert torch.allclose(positions[-1][1], pos0[1] + torch.tensor([2.0, 0.0]))  # Si는 그대로 누적
+
+
+def _cross_geometry() -> tuple[torch.Tensor, torch.Tensor]:
+    # 선분 A(0-1, y=1 수평) + 선분 B(2-3, x=0, y=-1~0.5, A와 아직 안 교차) — 두 선분은
+    # 서로 연결 안 됨(독립), 교차가드는 연결 여부와 무관하게 선분-선분 교차만 본다.
+    pos = torch.tensor([[-1.0, 1.0], [1.0, 1.0], [0.0, -1.0], [0.0, 0.5]])
+    edge_index = torch.tensor([[0, 2, 1, 3], [1, 3, 0, 2]], dtype=torch.int64)
+    return pos, edge_index
+
+
+def test_rollout_guard_shrinks_displacement_that_would_newly_cross() -> None:
+    pos0, edge_index = _cross_geometry()
+    normal0 = torch.tensor([[0.0, 1.0]] * 4)
+    material0 = torch.tensor([[0.0, 1.0]] * 4)
+    theta0 = torch.zeros((4, 7))
+    t0 = torch.zeros((4, 1))
+    node0 = torch.cat([pos0, normal0, material0, theta0, t0], dim=1)
+    edge0 = recompute_edge_features(pos0, edge_index)
+
+    class MovePoint3(nn.Module):
+        def forward(self, node, edge_index, edge):  # noqa: ANN001
+            del edge_index, edge
+            d = torch.zeros((node.shape[0], 2))
+            d[3] = torch.tensor([0.0, 1.0])  # 점3을 위로 1.0 이동 -> 선분A와 새로 교차
+            return d
+
+    without_guard = rollout(MovePoint3(), node0, edge_index, edge0, pos0, 1, 1.0, guard=False)
+    assert without_guard[-1][3, 1] > 1.0  # 교차 생김(y=1.5, 선분A를 완전히 지나침)
+
+    with_guard = rollout(MovePoint3(), node0, edge_index, edge0, pos0, 1, 1.0, guard=True)
+    assert with_guard[-1][3, 1] <= 1.0 + 1e-5  # 가드가 교차 직전까지만 허용(접촉, 관통 안 함)
+
+
 class ToyNodeMLP(nn.Module):
     def __init__(self, n_in: int = 14, n_out: int = 2) -> None:
         super().__init__()
@@ -135,9 +199,12 @@ def test_rollout_val_error_runs_on_real_fixture_graphs(tmp_path: pathlib.Path) -
     model = ToyNodeMLP()
     result = rollout_val_error(model, graphs_root, "r0000", n_steps=3, step_min=1.0)
 
-    assert set(result) == {"chamfer", "depth_error"}
+    assert set(result) == {"chamfer", "depth_error", "depth_pred", "depth_true"}
     assert result["chamfer"] >= 0.0
     assert result["depth_error"] >= 0.0
+    # depth_pred는 음수일 수 있다(ToyNodeMLP는 미학습이라 표면이 y=0 위로 발산하기도 함,
+    # metrics.depth()의 정의 -ymin 그대로) — depth_true만 실제 시뮬레이션 데이터라 >=0 보장.
+    assert result["depth_true"] >= 0.0
 
 
 def test_rollout_val_error_by_step_reports_each_requested_step(tmp_path: pathlib.Path) -> None:
@@ -150,7 +217,7 @@ def test_rollout_val_error_by_step_reports_each_requested_step(tmp_path: pathlib
 
     assert set(result) == {1, 2, 3}
     for s in (1, 2, 3):
-        assert set(result[s]) == {"chamfer", "depth_error"}
+        assert set(result[s]) == {"chamfer", "depth_error", "depth_pred", "depth_true"}
         assert result[s]["chamfer"] >= 0.0
 
 
@@ -204,6 +271,26 @@ def test_rollout_val_error_by_step_with_physics_check_counts_zero_for_unmoved_su
         model, graphs_root, "r0000", steps=[1], step_min=1.0, check_physics=True
     )
     assert result[1]["self_intersections"] == 0
+
+
+def test_rollout_val_error_by_step_reports_depth_pred_true_raw_values(
+    tmp_path: pathlib.Path,
+) -> None:
+    # W5-06 배선: 변위 0 모델이면 depth_pred는 t=0 표면 깊이 그대로여야 하고,
+    # depth_error는 depth_pred/depth_true의 절대차와 같아야 한다.
+    graphs_root = tmp_path / "graphs"
+    etl_run(FIXTURES / "r0000", graphs_root / "r0000", THETA_KEYS)
+
+    model = RecordingZeroModel()
+    result = rollout_val_error_by_step(model, graphs_root, "r0000", steps=[1], step_min=1.0)
+
+    g0 = load_graph(graphs_root / "r0000" / "g000.npz")
+    pred_lines = lines_from_edge_index(g0["edge_index"])
+    expected_depth0 = depth(outer_path(g0["pos"].numpy(), pred_lines))
+
+    assert abs(result[1]["depth_pred"] - expected_depth0) < 1e-6
+    raw_diff = abs(result[1]["depth_pred"] - result[1]["depth_true"])
+    assert abs(result[1]["depth_error"] - raw_diff) < 1e-6
 
 
 def test_rollout_val_error_by_step_with_physics_check_falls_back_on_divergence(
