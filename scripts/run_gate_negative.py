@@ -1,6 +1,10 @@
-"""W2-10: gate-negative(더미) — 정상 통과 / 무작위 변위 모델 차단(1) / dataset_hash 불일치 차단(2).
+"""W2-10: gate-negative(더미) — 정상 통과 / 깊이·CD 오차 모델 차단(1) / dataset_hash 불일치 차단(2).
 
 증거 ①(회귀 게이트 차단)의 더미 모델 버전 프로토타입. 5주차(W5-08)에서 실모델로 교체한다.
+
+ADR-0004(2026-11-11) 이후 "무작위 변위 모델"(RandomDisplacementModel)만으로는 더 이상
+차단되지 않는다 — ①(골든 Chamfer 상한)이 참고 지표로 다운그레이드됐기 때문. 그래서
+"망가진 모델" 시나리오는 깊이/CD 오차(②, 여전히 차단)를 직접 주입해서 모사한다.
 """
 
 import json
@@ -23,8 +27,11 @@ def main() -> int:
     r1 = run_gate(ZeroDisplacementModel(), GOLDEN_PAIRS, max_chamfer=MAX_CHAMFER)
     cases.append({"name": "정상 모델(변위 0)", "expected_exit_code": 0, "result": r1})
 
-    r2 = run_gate(RandomDisplacementModel(scale=5.0, seed=0), GOLDEN_PAIRS, max_chamfer=MAX_CHAMFER)
-    cases.append({"name": "무작위 변위 모델(망가진 모델)", "expected_exit_code": 1, "result": r2})
+    r2 = run_gate(
+        RandomDisplacementModel(scale=5.0, seed=0), GOLDEN_PAIRS, max_chamfer=MAX_CHAMFER,
+        depth_pred=[50.0], depth_true=[10.0], cd_pred=[50.0], cd_true=[10.0],
+    )
+    cases.append({"name": "깊이·CD 오차 모델(망가진 모델)", "expected_exit_code": 1, "result": r2})
 
     r3 = run_gate(
         ZeroDisplacementModel(), GOLDEN_PAIRS, max_chamfer=MAX_CHAMFER,

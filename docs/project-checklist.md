@@ -240,7 +240,8 @@ node_block이 번갈아 쌓임)라 레이어 12개는 **`processor_size=6`**이 
   기준으로 계산), `iou`, `cd_at_y`/`cd_profile`(top/mid/bot), `taper_angle_deg`, `bowing`,
   `measure_latency` 추가. `src/etchpipe/train/rollout.py`에 `rollout_val_error_by_step`
   추가(스텝 5·10·20별 보고, `rollout_val_error`는 그 위에 얇은 래퍼로 재구성) — 증거:
-  `reports/evidence/W5-01_metrics.md`.
+  `reports/evidence/W5-01_metrics.md`. **갱신(2026-11-11)**: Chamfer 정의가
+  ADR-0004로 교체됨 — `reports/evidence/ADR-0004_chamfer_gate_rework.md`.
 - [x] W5-02 `eval.py`: 체크포인트 + `dataset_hash` → `metrics.json`, 그림 PNG(예측 vs 정답 오버레이), 결정적, 하드웨어·시드 기록
   — **[CPU/매핑] 완료(2026-11-10)**: `src/etchpipe/eval/eval.py`(`run_eval`, `load_model_a`,
   CLI) 신규. 스텝 5·10·20(및 최종) 지표, `plots/<run_id>.png`, `git_sha`/패키지/하드웨어/
@@ -248,9 +249,22 @@ node_block이 번갈아 쌓임)라 레이어 12개는 **`processor_size=6`**이 
   — 증거: `reports/evidence/W5-02_eval.md`.
 - [ ] W5-03 OOD 20개 평가 → 별도 표
 - [ ] W5-04 게이트 임계값 산출: 첫 정상 모델 val 중앙값 Chamfer × 1.5 → `configs/pipeline/gate.yaml` 고정(변경 시 ADR) → 설계서 §3 C5
-- [ ] W5-05 게이트 완성: 항목 1~4, 챔피언 없음 케이스, `gate_result.json`
+- [x] W5-05 게이트 완성: 항목 1~4, 챔피언 없음 케이스, `gate_result.json`
+  — **[CPU/매핑] 완료(2026-11-11)**: `src/etchpipe/gate/gate.py`에 `check_cd_depth_error`
+  (②), `check_champion_regression`(③, 챔피언 없으면 자동 통과), `check_latency`(⑤, 차단
+  아니고 `GateResult.warnings`에만), `write_gate_result`(`gate_result.json`) 추가.
+  `run_gate`는 새 인자를 안 주면 기존 동작 그대로(하위 호환) — 증거:
+  `reports/evidence/W5-05_W5-07_gate_registry.md`. **갱신(2026-11-11)**: ①③ 참고지표화,
+  ②(깊이/CD) 시그니처 변경, ④ 다중레시피 추가, 물리 규칙(선꼬임+모델별결함) 신설 —
+  ADR-0004, `reports/evidence/ADR-0004_chamfer_gate_rework.md`. **주의**: 설계서 §3 C5
+  "자체 테스트" 목록(노이즈/1에폭/시뮬레이터 버전 변경 모델 차단)은 ①만으로는 더 이상
+  안 막히므로, W5-06 작성 시 ②④물리 중 하나를 같이 걸어야 함.
 - [ ] W5-06 **부정 테스트 6종**(설계서 §3 C5): 정상 통과 / 노이즈 모델 차단 / 1에폭 모델 차단 / 시뮬레이터 버전 변경 데이터로 학습한 모델 차단 / `dataset_hash` 불일치(코드 2) / 골든 변조(코드 2)
-- [ ] W5-07 레지스트리 완성: `manifest.json`, `valid_range.json`, 자동 모델 카드, 승격·롤백·`history.jsonl` → FR-11
+- [x] W5-07 레지스트리 완성: `manifest.json`, `valid_range.json`, 자동 모델 카드, 승격·롤백·`history.jsonl` → FR-11
+  — **[CPU/매핑] 완료(2026-11-11)**: `src/etchpipe/registry/registry.py`에 `register`
+  (카드+valid_range.json 생성, 설계서 §10 "BLOCK 모델은 registry/에 안 씀" 반영),
+  `rollback`, `verify_artifact`(SHA-256), `compute_valid_range`, `manifest.json` 자동
+  갱신 추가 — 증거: `reports/evidence/W5-05_W5-07_gate_registry.md`.
 - [ ] W5-08 CI `gate-negative`를 실모델 기준으로 교체, 로그를 아티팩트로 저장
 - [ ] W5-09 **증거 ① 제출본**: 부정 테스트 6종 결과를 `reports/evidence/W5-09_gate_negative.md`로 정리·커밋
 

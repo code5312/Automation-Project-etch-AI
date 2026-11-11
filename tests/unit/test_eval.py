@@ -81,12 +81,14 @@ def test_run_eval_writes_metrics_structure_and_plots(tmp_path: pathlib.Path) -> 
     )
 
     assert result["n_val"] == 3
-    assert set(result["final_step"]) == {"chamfer", "depth_error"}
+    assert set(result["final_step"]) == {"chamfer", "depth_error", "self_intersections_total"}
+    assert result["final_step"]["self_intersections_total"] >= 0
     assert set(result["by_step"]) <= {"1", "2"}
     assert len(result["per_run"]) == 3
     for entry in result["per_run"]:
         assert entry["actual_k"] == 3
         assert 3 in entry["steps"]  # 최종 스텝은 steps 목록에 없어도 항상 포함
+        assert "self_intersections" in entry["steps"][3]
 
     # 정렬된 순서로 앞 2개(r0000, r0001)만 플롯이 생겨야 함
     plot_files = sorted(p.name for p in (out_dir / "plots").glob("*.png"))

@@ -7,6 +7,7 @@ import hashlib
 import json
 import pathlib
 import sys
+from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
@@ -204,6 +205,33 @@ def signed_dist_field(
     inside = _inside_solid(x, y, p, boundary_lines, y_below=y_below)
     sign = np.where(inside, -1.0, 1.0)
     return (sign * dist).reshape(ny, nx).astype(np.float32)
+
+
+def outer_path(points: np.ndarray, lines: np.ndarray) -> np.ndarray:
+    """플라즈마에 닿는 바깥 표면선만 추출 [확인, ADR-0004 — 골든셋 공식 채점 노트북
+    `outer_path()` 그대로 포팅]. `load_snapshot`의 `lines`는 마스크/Si 내부 경계까지
+    섞인 전체 메시 연결이라(`_filter_internal_interfaces`가 SDF 계산에서만 이를 걸러내는
+    것과 같은 이유), 왼쪽 위 열린 끝점(x<0, y 최대)에서 오른쪽 위 열린 끝점(x>0, y
+    최대)까지의 경로만 남겨야 표면만 남는다. 열린 끝점은 인접 선분이 1개뿐인 점."""
+    neighbors: list[list[int]] = [[] for _ in range(len(points))]
+    for a, b in lines:
+        neighbors[a].append(b)
+        neighbors[b].append(a)
+    ends = [i for i in range(len(points)) if len(neighbors[i]) == 1]
+    start = max((i for i in ends if points[i, 0] < 0), key=lambda i: points[i, 1])
+    goal = max((i for i in ends if points[i, 0] > 0), key=lambda i: points[i, 1])
+    previous: dict[int, int | None] = {start: None}
+    queue = deque([start])
+    while queue:
+        u = queue.popleft()
+        for v in neighbors[u]:
+            if v not in previous:
+                previous[v] = u
+                queue.append(v)
+    path = [goal]
+    while previous[path[-1]] is not None:
+        path.append(previous[path[-1]])
+    return points[np.array(path[::-1])]
 
 
 def metrics(p: np.ndarray) -> dict:

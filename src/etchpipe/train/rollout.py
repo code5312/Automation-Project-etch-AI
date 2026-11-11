@@ -19,9 +19,11 @@ theta[6:13], t[13:14] (2+2+2+7+1=14).
 
 from pathlib import Path
 
+import numpy as np
 import torch
 
-from etchpipe.eval.metrics import chamfer_distance, depth_error
+from etchpipe.etl.etl import outer_path
+from etchpipe.eval.metrics import chamfer_distance, depth_error, self_intersection_count
 from etchpipe.train.loop import NodeEdgeNorm, load_graph, normalize_edge, normalize_node
 
 
@@ -87,6 +89,15 @@ def rollout(
     return positions
 
 
+def lines_from_edge_index(edge_index: torch.Tensor) -> np.ndarray:
+    """`etl.to_graph`가 만든 양방향 엣지(앞쪽 절반=원래 선분, 뒤쪽 절반=반대 방향)에서
+    원래 선분 `(E,2)`만 복원 [확인, `to_graph`의 `ei = concat([lines, lines[:,::-1]]).T`
+    구성 그대로 역산]. `etl.outer_path`에 넘겨 표면선만 추출하는 용도(ADR-0004 물리
+    규칙 배선)."""
+    n_directed = edge_index.shape[1] // 2
+    return edge_index[:, :n_directed].T.numpy()
+
+
 def rollout_val_error_by_step(
     model,
     graphs_root,
@@ -94,14 +105,24 @@ def rollout_val_error_by_step(
     steps: list[int],
     step_min: float,
     norm: NodeEdgeNorm | None = None,
+    check_physics: bool = False,
 ) -> dict[int, dict[str, float]]:
     """`g000.npz`(t=0)에서 `max(steps)`까지 롤아웃하고, `steps`의 각 스텝에서 실제
     `g<step>.npz`와 비교(W5-01, 설계서 C4 "스텝 5·10·20 보고") — 최종 스텝만 보면
     중간에 오차가 급증했다가 다시 줄어드는 패턴을 놓칠 수 있다
-    (`reports/model_issues_mgn.md` "판단 기준" 3번)."""
+    (`reports/model_issues_mgn.md` "판단 기준" 3번).
+
+    `check_physics=True`면 각 스텝마다 `self_intersections`(선 꼬임 수)도 같이 낸다
+    [확인, ADR-0004 결정4 배선 — `outer_path`로 마스크/Si 내부 경계가 섞인 그래프에서
+    표면선만 추출한 뒤 `self_intersection_count`]. 기본은 꺼져 있다(①②와 달리 O(N²)이라
+    공짜가 아니라서, 쓰는 곳에서만 명시적으로 켠다). 예측이 도메인 밖으로 완전히
+    발산해(`outer_path`가 왼쪽/오른쪽 열린 끝점을 못 찾음) 표면 자체를 복원 못 하면
+    예외를 전파하지 않고 `self_intersections=1`(명백한 물리 위반)로 집계한다 — 토이
+    모델에 정규화 없이 실제 θ 크기를 그대로 먹여 1스텝에 발산하는 경우로 실측 확인."""
     root = Path(graphs_root) / run_id
     g0 = load_graph(root / "g000.npz")
     max_step = max(steps)
+    lines = lines_from_edge_index(g0["edge_index"]) if check_physics else None
 
     positions = rollout(
         model, g0["node"], g0["edge_index"], g0["edge"], g0["pos"], max_step, step_min, norm
@@ -110,10 +131,19 @@ def rollout_val_error_by_step(
     for s in steps:
         true_s = load_graph(root / f"g{s:03d}.npz")["pos"].numpy()
         pred_s = positions[s].numpy()
-        result[s] = {
+        entry = {
             "chamfer": chamfer_distance(pred_s, true_s),
             "depth_error": depth_error(pred_s, true_s),
         }
+        if lines is not None:
+            try:
+                entry["self_intersections"] = self_intersection_count(outer_path(pred_s, lines))
+            except ValueError:
+                # outer_path가 왼쪽(x<0)/오른쪽(x>0) 열린 끝점을 못 찾고 실패 — 예측이
+                # 도메인 밖으로 완전히 발산해 표면 형상 자체가 깨졌다는 뜻이다. 평가
+                # 배치를 멈추는 대신(KeyError 전파) 명백한 물리 위반(>0)으로 집계한다.
+                entry["self_intersections"] = 1
+        result[s] = entry
     return result
 
 
@@ -124,8 +154,9 @@ def rollout_val_error(
     n_steps: int,
     step_min: float,
     norm: NodeEdgeNorm | None = None,
+    check_physics: bool = False,
 ) -> dict[str, float]:
     """`g000.npz`(t=0)에서 `n_steps` 롤아웃한 마지막 예측을 실제 `g<n_steps>.npz`와 비교."""
-    return rollout_val_error_by_step(model, graphs_root, run_id, [n_steps], step_min, norm)[
-        n_steps
-    ]
+    return rollout_val_error_by_step(
+        model, graphs_root, run_id, [n_steps], step_min, norm, check_physics
+    )[n_steps]

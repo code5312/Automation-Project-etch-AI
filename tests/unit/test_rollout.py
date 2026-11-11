@@ -2,11 +2,13 @@
 
 import pathlib
 
+import numpy as np
 import torch
 from torch import nn
 
-from etchpipe.etl.etl import THETA_KEYS, etl_run
+from etchpipe.etl.etl import THETA_KEYS, etl_run, load_snapshot, to_graph
 from etchpipe.train.rollout import (
+    lines_from_edge_index,
     recompute_edge_features,
     recompute_normals,
     rollout,
@@ -166,3 +168,56 @@ def test_rollout_val_error_by_step_matches_rollout_val_error_at_same_step(
     by_step = rollout_val_error_by_step(model, graphs_root, "r0000", steps=[3], step_min=1.0)
 
     assert single == by_step[3]
+
+
+def test_lines_from_edge_index_recovers_original_lines() -> None:
+    # ADR-0004 물리 규칙 배선: to_graph의 실제 양방향 엣지 구성(앞 절반=원본 선분)을
+    # 그대로 역산하는지 real fixture로 확인.
+    p, lines, mid, nv = load_snapshot(FIXTURES / "r0000" / "snapshots" / "t000.vtp")
+    theta = np.zeros(7, dtype=np.float32)
+    _, ei, _ = to_graph(p, lines, mid, nv, theta, t=0.0)
+    recovered = lines_from_edge_index(torch.from_numpy(ei))
+    np.testing.assert_array_equal(recovered, lines)
+
+
+def test_rollout_val_error_by_step_without_physics_check_omits_self_intersections(
+    tmp_path: pathlib.Path,
+) -> None:
+    graphs_root = tmp_path / "graphs"
+    etl_run(FIXTURES / "r0000", graphs_root / "r0000", THETA_KEYS)
+
+    torch.manual_seed(0)
+    model = ToyNodeMLP()
+    result = rollout_val_error_by_step(model, graphs_root, "r0000", steps=[1], step_min=1.0)
+    assert "self_intersections" not in result[1]
+
+
+def test_rollout_val_error_by_step_with_physics_check_counts_zero_for_unmoved_surface(
+    tmp_path: pathlib.Path,
+) -> None:
+    # 변위 0(ZeroDisplacementModel류) -> 원본 표면 그대로 -> 자기교차 없음(0).
+    graphs_root = tmp_path / "graphs"
+    etl_run(FIXTURES / "r0000", graphs_root / "r0000", THETA_KEYS)
+
+    model = RecordingZeroModel()
+    result = rollout_val_error_by_step(
+        model, graphs_root, "r0000", steps=[1], step_min=1.0, check_physics=True
+    )
+    assert result[1]["self_intersections"] == 0
+
+
+def test_rollout_val_error_by_step_with_physics_check_falls_back_on_divergence(
+    tmp_path: pathlib.Path,
+) -> None:
+    # ToyNodeMLP(미학습, norm 없이 실제 θ 크기 그대로 입력)는 1스텝만에 도메인 밖으로
+    # 발산해 outer_path가 왼쪽/오른쪽 끝점을 못 찾는다 — 예외 대신 self_intersections=1
+    # (명백한 물리 위반)로 떨어져야 한다.
+    graphs_root = tmp_path / "graphs"
+    etl_run(FIXTURES / "r0000", graphs_root / "r0000", THETA_KEYS)
+
+    torch.manual_seed(0)
+    model = ToyNodeMLP()
+    result = rollout_val_error_by_step(
+        model, graphs_root, "r0000", steps=[1], step_min=1.0, check_physics=True
+    )
+    assert result[1]["self_intersections"] == 1

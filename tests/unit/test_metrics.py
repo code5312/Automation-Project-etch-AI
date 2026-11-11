@@ -16,6 +16,7 @@ from etchpipe.eval.metrics import (
     mask_from_points,
     mask_from_sdf,
     measure_latency,
+    self_intersection_count,
     taper_angle_deg,
 )
 
@@ -34,13 +35,36 @@ def test_chamfer_order_invariant() -> None:
 
 
 def test_chamfer_parallel_lines_known_distance() -> None:
-    # 두 평행한 직선(y=0, y=d)을 조밀하게 샘플링하면 양방향 최근접 거리는 모두 d에 수렴
+    # 두 평행한 직선(y=0, y=d)을 조밀하게 샘플링하면 양방향 평균 거리는 d에 수렴
     x = np.linspace(0, 10, 200)
     line_a = np.stack([x, np.zeros_like(x)], axis=1)
     d = 2.5
     line_b = np.stack([x, np.full_like(x, d)], axis=1)
     cd = chamfer_distance(line_a, line_b)
-    assert abs(cd - 2 * d) < 0.05  # 양방향 합이므로 2*d
+    assert abs(cd - d) < 0.05  # ADR-0004 결정1: 양방향 평균(÷2)이므로 d
+
+
+def test_chamfer_sparse_points_use_segment_not_vertex_distance() -> None:
+    # ADR-0004 결정1: 점-점(최근접 점) 방식이면 점이 희소한 쪽(여기선 끝점 2개뿐)에서
+    # 중간 지점이 먼 끝점까지의 대각선 거리로 과대평가된다(약 5.59, d가 아님). 점-선분
+    # 방식은 점이 2개뿐이어도 선분 위 수직 거리로 재서 d에 정확히 수렴해야 한다.
+    sparse = np.array([[0.0, 0.0], [10.0, 0.0]])  # 끝점 2개뿐인 직선
+    x = np.linspace(0, 10, 200)
+    d = 2.5
+    dense = np.stack([x, np.full_like(x, d)], axis=1)
+    cd = chamfer_distance(sparse, dense)
+    assert abs(cd - d) < 0.05
+
+
+def test_self_intersection_count_zero_for_simple_curve() -> None:
+    curve = np.array([[0.0, 0.0], [1.0, -1.0], [2.0, 0.0]])
+    assert self_intersection_count(curve) == 0
+
+
+def test_self_intersection_count_detects_crossing() -> None:
+    # 나비 모양: (0,0)->(2,2)->(2,0)->(0,2) 는 중간에서 스스로 교차한다.
+    curve = np.array([[0.0, 0.0], [2.0, 2.0], [2.0, 0.0], [0.0, 2.0]])
+    assert self_intersection_count(curve, min_loop=0.01) > 0
 
 
 def test_depth_on_rectangular_trench() -> None:

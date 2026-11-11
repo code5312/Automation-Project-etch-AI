@@ -47,8 +47,9 @@ def main() -> int:
     mean_chamfer = sum(errs) / len(errs)
     print(f"   zero-model vs t1 평균 Chamfer: {mean_chamfer:.4f} (스모크 참고치)")
 
-    print("4) 게이트: 더미 임계값으로 PASS 확인(최소판 — 항목 ①만)")
+    print("4) 게이트: PASS 경로 확인(②③④물리 입력 없이 전부 건너뛰어 기본 PASS)")
     # 스모크 목적: 모델 성능이 아니라 "게이트가 호출되고 PASS 경로가 동작하는지"만 본다.
+    # ADR-0004 이후 ①(golden chamfer)은 참고 지표로만 쓰여 더 이상 차단 조건이 아니다.
     gate_result = run_gate(model, golden_pairs, max_chamfer=mean_chamfer + 1e-6)
     print("   gate:", gate_result)
     if gate_result.exit_code != 0:

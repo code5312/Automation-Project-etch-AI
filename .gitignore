@@ -61,3 +61,9 @@ kind.exe
 .claude/
 seed.zip
 
+# 팀원이 전달한 골든셋 채점 노트북·담당자 README(ADR-0004 근거 자료) — 작업 참고용으로만
+# 쓰고 커밋은 안 하기로 함(2026-11-11, 사용자 결정). 루트에 바로 떨어뜨려 두는 전제.
+/golden10_채점_(입력용).ipynb
+/README_FNO담당.md
+/README_MGN담당.md
+

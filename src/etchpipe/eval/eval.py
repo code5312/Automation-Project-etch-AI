@@ -119,14 +119,15 @@ def run_eval(
     per_run = []
     by_step: dict[int, list[float]] = {s: [] for s in steps}
     by_step_depth: dict[int, list[float]] = {s: [] for s in steps}
-    final_chamfer, final_depth = [], []
+    by_step_self_x: dict[int, list[int]] = {s: [] for s in steps}
+    final_chamfer, final_depth, final_self_x = [], [], []
 
     for i, rid in enumerate(sorted(val_ids)):
         meta = json.loads((raw_dir / rid / "meta.json").read_text())
         actual_k = meta["actual_k"]
         run_steps = sorted({s for s in steps if s <= actual_k} | {actual_k})
         result = rollout_val_error_by_step(
-            model, graphs_root, rid, run_steps, meta["step_min"], norm=norm
+            model, graphs_root, rid, run_steps, meta["step_min"], norm=norm, check_physics=True
         )
         entry = {"run_id": rid, "actual_k": actual_k, "steps": result}
         per_run.append(entry)
@@ -134,8 +135,10 @@ def run_eval(
             if s in result:
                 by_step[s].append(result[s]["chamfer"])
                 by_step_depth[s].append(result[s]["depth_error"])
+                by_step_self_x[s].append(result[s]["self_intersections"])
         final_chamfer.append(result[actual_k]["chamfer"])
         final_depth.append(result[actual_k]["depth_error"])
+        final_self_x.append(result[actual_k]["self_intersections"])
 
         if i < n_plots:
             g0 = load_graph(pathlib.Path(graphs_root) / rid / "g000.npz")
@@ -155,11 +158,19 @@ def run_eval(
     return {
         "n_val": len(val_ids),
         "by_step": {
-            str(s): {"chamfer": _agg(by_step[s]), "depth_error": _agg(by_step_depth[s])}
+            str(s): {
+                "chamfer": _agg(by_step[s]),
+                "depth_error": _agg(by_step_depth[s]),
+                "self_intersections_total": int(sum(by_step_self_x[s])),
+            }
             for s in steps
             if by_step[s]
         },
-        "final_step": {"chamfer": _agg(final_chamfer), "depth_error": _agg(final_depth)},
+        "final_step": {
+            "chamfer": _agg(final_chamfer),
+            "depth_error": _agg(final_depth),
+            "self_intersections_total": int(sum(final_self_x)),
+        },
         "per_run": per_run,
     }
 
