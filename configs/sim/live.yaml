@@ -1,0 +1,31 @@
+# W6-01: 드리프트(운영 중 시뮬레이터 조건 변화) 모사 설정.
+# 정의서 §3 증거②: "모델 입력 Θ에 없는 시뮬레이터 계수(Substrate.A_ie, 기본 7.0)를
+# ×1.15로 변경한 조건에서 레시피 60개 생성: train 40 / val 10 / golden_drift 10 [제안]"
+#
+# base.yaml과 sim 블록은 동일(grid_delta·rays·seed·K·depth_max 전부 안 바꿈) —
+# 바뀌는 건 모델 입력 공간(Θ)에 안 보이는 Substrate.A_ie 하나뿐이라는 게 "드리프트"의
+# 핵심이다(파라미터 범위를 벗어나는 OOD와는 다른 종류의 분포 변화).
+#
+# [확인, 2026-11-12] `ps.SF6O2Etching.defaultParameters().Substrate.A_ie`가 실제로
+# 존재하고 기본값 7.0임을 `etch-sim:0.1` 컨테이너에서 import해 확인함
+# (Substrate 속성: A_ie, A_sp, B_ie, B_sp, Eth_ie, Eth_sp, beta_sigma, k_sigma, rho).
+
+sim_config_id: live_v1
+
+sim:
+  K: 20
+  depth_max: 50.0
+  rays: 300
+  grid_delta: 0.3
+  step_min: 1.0
+
+drift:
+  substrate_a_ie: 8.05  # 7.0 * 1.15 [확인: 계산값]
+
+# 드리프트 데이터 생성 규모(W6-03): base.yaml의 splits와 별개 — train 40 / val 10 /
+# golden_drift 10 (정의서 §3 증거②). base.yaml의 splits(300/40/40/20/10)는 이 파일
+# 범위 밖.
+splits:
+  n_train: 40
+  n_val: 10
+  n_golden_drift: 10

@@ -30,7 +30,14 @@ def run_sim(
     seed: int = 42,
     grid_delta: float = 0.3,
     depth_max: float = DEPTH_MAX_DEFAULT,
+    substrate_a_ie: float | None = None,
+    sim_config_id: str = "base",
 ) -> dict:
+    """`substrate_a_ie`(기본 `None` → ViennaPS 기본값 7.0 그대로)는 Θ(모델 입력)에 없는
+    시뮬레이터 내부 계수(`p.Substrate.A_ie`) 오버라이드 — W6-01 드리프트 모사
+    (`configs/sim/live.yaml`이 ×1.15=8.05로 호출, [확인] 2026-11-12 `etch-sim:0.1`에서
+    해당 속성 실존·기본값 7.0 확인). `sim_config_id`는 어느 설정(`base`/`live`)으로
+    생성됐는지 `meta.json`에 남겨 드리프트 데이터(W6-03)를 구분하는 용도."""
     out = pathlib.Path(out_dir)
     (out / "snapshots").mkdir(parents=True, exist_ok=True)
 
@@ -49,6 +56,8 @@ def run_sim(
     p.Ions.meanEnergy = params["ion_mean_energy"]
     p.Ions.sigmaEnergy = 10.0
     p.Ions.exponent = params["ion_exponent"]
+    if substrate_a_ie is not None:
+        p.Substrate.A_ie = substrate_a_ie
     model = ps.SF6O2Etching(p)
 
     adv = ps.AdvectionParameters()
@@ -91,6 +100,8 @@ def run_sim(
         "seed": seed,
         "grid_delta": grid_delta,
         "depth_max": depth_max,
+        "substrate_a_ie": substrate_a_ie,  # None이면 ViennaPS 기본값(7.0) 그대로 썼다는 뜻
+        "sim_config_id": sim_config_id,
         "stopped_early": stopped_early,
         "final_depth_um": round(_current_depth(domain), 3),
         "viennaps": getattr(ps, "__version__", "4.5.0"),

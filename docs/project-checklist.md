@@ -341,12 +341,33 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
 우선순위 순서로 진행한다. 시간이 모자라면 아래에서부터 줄인다.
 
 ### ① 재학습 루프 (먼저)
-- [ ] W6-01 `configs/sim/live.yaml`(드리프트 오버라이드 `Substrate.A_ie` ×1.15), `sim_config_id` 반영
-- [ ] W6-02 모니터: 신규 레시피 10개를 live 설정으로 시뮬레이션 → champion 예측과 Chamfer 비교 → `drift_threshold`(= champion 골든 Chamfer × 1.5) 초과 시 **자동 반복 루프**(ADR-0002) 트리거 → FR-09
-- [ ] W6-03 드리프트 데이터 60개 생성(train 40 / val 10 / golden_drift 10) → ETL → 새 `dataset_hash` — 루프 1차 시도의 입력
-- [ ] W6-04 **자동 반복 루프 구현(최대 4회, ADR-0002)**: 1차 champion에서 3~5에폭 미세조정 → 게이트. BLOCK이면 2차(드리프트 train 40→100개 자동 확장 재생성, ViennaPS 추가 호출) → 게이트. BLOCK이면 3차(에폭 10~15) → 4차(학습률 조정) 순서로 자동 진행. 어느 시도든 PASS면 즉시 승격하고 루프 종료, 4회 모두 BLOCK이면 champion 유지 + 알림. 시도마다 게이트 결과 기록
+- [x] W6-01 `configs/sim/live.yaml`(드리프트 오버라이드 `Substrate.A_ie` ×1.15), `sim_config_id` 반영
+  — **완료(2026-11-12)**: `run_sim()`에 `substrate_a_ie`(기본 `None`=하위호환)·
+  `sim_config_id` 인자 추가. `etch-sim:0.1`에서 `p.Substrate.A_ie` 실존·기본값 7.0 확인
+  후 K=3 스모크 테스트로 끝까지 실행 검증 — 증거: `reports/evidence/W6-01_drift_config.md`.
+- [x] W6-02 모니터: 신규 레시피 10개를 live 설정으로 시뮬레이션 → champion 예측과 Chamfer 비교 → `drift_threshold`(= champion 골든 Chamfer × 1.5) 초과 시 **자동 반복 루프**(ADR-0002) 트리거 → FR-09
+  — **완료(2026-11-12)**: `src/etchpipe/retrain/monitor.py`(`mean_chamfer_over_recipes`/
+  `check_drift`) + `tests/unit/test_monitor.py`(3종). 실제 10개 레시피 실측:
+  `champion_golden_chamfer=0.4227`, `drift_threshold=0.6341`, `mean_chamfer=0.4461` →
+  **트리거 안 됨**(`Substrate.A_ie`×1.15 드리프트를 champion이 재학습 없이 버팀) — 증거:
+  `reports/evidence/W6-02_drift_monitor.md`. **주의**: 이 결과대로면 W6-03/04의 "자동
+  반복 루프"를 자연 발생으로 시연할 수 없음 — 진행 방식 사용자 확인 필요(아래).
+- [~] W6-03 드리프트 데이터 60개 생성(train 40 / val 10 / golden_drift 10) → ETL → 새 `dataset_hash` — 루프 1차 시도의 입력
+  — **코드 완료, 실행 보류(2026-11-12 사용자 결정)**: `src/etchpipe/sim/drift_recipes.py`
+  (Sobol 분할, viennaps 비의존) + `scripts/run_drift_data_gen.py`(`etch-sim:0.1`, 시뮬레이션)
+  + `scripts/process_drift_data.py`(`etch-train:0.1`, `etl.process_dataset` 재사용 →
+  dataset_hash). 실제 60개 시뮬레이션(2~6시간 추정)은 W6-04 증거②와 함께 나중에 수동
+  트리거하기로 함 — W6-02에서 이 드리프트 강도(×1.15)로는 루프가 자연 트리거되지 않음을
+  확인했기 때문(`reports/evidence/W6-02_drift_monitor.md`).
+- [~] W6-04 **자동 반복 루프 구현(최대 4회, ADR-0002)**: 1차 champion에서 3~5에폭 미세조정 → 게이트. BLOCK이면 2차(드리프트 train 40→100개 자동 확장 재생성, ViennaPS 추가 호출) → 게이트. BLOCK이면 3차(에폭 10~15) → 4차(학습률 조정) 순서로 자동 진행. 어느 시도든 PASS면 즉시 승격하고 루프 종료, 4회 모두 BLOCK이면 champion 유지 + 알림. 시도마다 게이트 결과 기록
   — **[CPU/매핑]** 루프 오케스트레이션 코드(시도 순서·게이트 호출·기록)는 CPU에서 구현 가능.
   **[GPU 팀원]** 실제 미세조정(에폭 실행) 자체는 GPU에서 수행.
+  — **오케스트레이션 코드 완료(2026-11-12)**: `src/etchpipe/retrain/loop.py::run_retrain_loop`
+  (ADR-0002 에스컬레이션 표 그대로, `fine_tune_fn`/`gate_fn`/`regenerate_fn` 주입식 —
+  실제 미세조정은 GPU 팀원 엔트리포인트를 나중에 꽂음). `tests/unit/test_retrain_loop.py`
+  6종(1차 통과 즉시 종료/점진 에스컬레이션/4회 전부 BLOCK/2차에서만 regenerate 호출/
+  ADR-0002 설정값 일치/max_attempts). **실제 실행(실제 미세조정+게이트, 증거②)은
+  W6-03 데이터와 함께 나중에 수동 트리거** — 사용자 결정.
 - [ ] W6-05 `python -m etchpipe.retrain run` 단일 명령으로 전 과정(에스컬레이션 루프 포함) 무개입 실행, `reports/evidence/retrain_<ts>.json`에 `attempts: [{attempt, config, gate_result}, ...]` 기록
 - [ ] W6-06 **증거 ② 제출본**: 승격까지 완주한 실행 1회 이상(자동 반복 과정 포함) + 재학습 전/후 오차 표 + 시도별 로그. 4회 모두 BLOCK이면 그 자체를 결과로 기록(사람이 사후 원인 분석, 이번 루프의 무개입 완주 정의는 깨지 않음)
 - [ ] W6-07 `retrain-demo` 수동 워크플로(소규모 설정)
