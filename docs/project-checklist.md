@@ -396,14 +396,32 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   원본값 제외. 부수 발견: `BaseHTTPMiddleware`가 예외 핸들러 호출을 막아 순수 ASGI
   미들웨어로 교체. `scripts/fuzz_predict.py`로 100개 퍼징 — 5xx 0건. 증거:
   `reports/evidence/W6-09_error_sanitization_fuzz.md`.
-- [ ] W6-10 `docker-compose.yml`, 로컬 직접 실행 문서화, 두 방식 모두 `/health` 확인, 지연 측정(조건 병기)
+- [x] W6-10 `docker-compose.yml`, 로컬 직접 실행 문서화, 두 방식 모두 `/health` 확인, 지연 측정(조건 병기)
+  — **완료(2026-11-12)**: `docker-compose.yml`(serve 1서비스, `etch-serve:0.1` 재사용,
+  `src`/`registry`/`runs/mgn_tuned` 읽기전용 마운트) + `docs/serving.md`(두 방식 실행
+  커맨드). compose·직접 실행(`docker run`) 둘 다 `/health` 200, `/model`·`/predict`
+  실제 동작 확인(API 키 검증 포함). `/predict` 지연 실측: 둘 다 안정화 후 ~19~20초
+  (CPU, 2스텝 롤아웃) — 증거: `reports/evidence/W6-10_docker_compose_local_run.md`.
 
 ### ③ 모델 B (마지막, 줄일 수 있음)
-- [ ] W6-11 FNO 구현(S6 결과 기반), SDF 0등고선 복원 → FR-08 — **[CPU/매핑]** 모델 래퍼·입출력
+- [x] W6-11 FNO 구현(S6 결과 기반), SDF 0등고선 복원 → FR-08 — **[CPU/매핑]** 모델 래퍼·입출력
   매핑 코드(`src/etchpipe/models/fno.py`, MeshGraphNet 래퍼와 같은 패턴)는 CPU에서 작성.
   **[GPU 팀원]** 실제 학습(원래 계획 "CPU 학습(격자 128×256)"에서 변경, GPU로 진행)·오차율 확인.
-- [ ] W6-12 모델 A/B 비교표(같은 test 분할·지표·조건)
-- [ ] W6-13 시간이 모자라면 모델 B를 "단일 조건 단순 비교"로 축소하고 비교표는 유지, 축소 내용을 문서에 기록
+  — **완료(2026-11-12)**: GPU 팀원이 전달한 `runs/fno_tuned/`(골든10 Chamfer 0.069µm,
+  합격)의 `inference.py`/`preprocess.py`를 재구현 없이 그대로 감싸는 `FNOModel` 작성
+  (`sdf_from_vtp`/`rollout_sdf`/`curve_from_sdf`/`predict_curve`). `curve_from_sdf`가
+  SDF 0등고선 복원(`skimage.measure.find_contours`). scikit-image 의존성 추가 발견·설치
+  (0.26.0, requirements-train.txt/Dockerfile.train/CI). 실제 체크포인트·실제 데이터로
+  테스트 3종 통과(README 문서화 값 33.22/33.05 재확인 포함) — 증거:
+  `reports/evidence/W6-11_fno_wrapper.md`.
+- [x] W6-12 모델 A/B 비교표(같은 test 분할·지표·조건)
+  — **완료(2026-11-12)**: `scripts/run_model_comparison.py`로 test 40개 전체, 같은
+  정답(outer_path 메시 폴리라인) 기준 Chamfer·깊이오차 비교. 결과: 모델 A(mgn_tuned,
+  epoch=2) Chamfer 0.408/깊이오차 1.540, 모델 B(fno_tuned) Chamfer 0.155/깊이오차
+  0.320 — B가 뚜렷하게 낫지만 A가 epoch=2뿐이라 학습 성숙도 차이로 해석. 증거:
+  `reports/evidence/W6-12_model_comparison.md`.
+- [x] W6-13 시간이 모자라면 모델 B를 "단일 조건 단순 비교"로 축소하고 비교표는 유지, 축소 내용을 문서에 기록
+  — **해당 없음(2026-11-12)**: W6-12를 test 40개 전체로 완주해서 축소가 필요 없었음.
 
 **게이트 G6**: 증거 ②가 존재하고, 서빙이 로컬·Compose 모두에서 동작한다.
 

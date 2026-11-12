@@ -38,7 +38,7 @@ jobs:
       - run: pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
       - run: pip install nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1
       - run: pip install --no-build-isolation torch_scatter==2.1.2
-      - run: pip install pyvista==0.49.1 numpy==2.4.6 scipy==1.17.1 shapely==2.2.0 PyYAML==6.0.3
+      - run: pip install pyvista==0.49.1 numpy==2.4.6 scipy==1.17.1 shapely==2.2.0 PyYAML==6.0.3 scikit-image==0.26.0
       - run: pip install -r requirements-dev.txt
       - run: pip install -e .
       # test_serve.py는 fastapi 등 서빙 전용 의존성이 필요(아래 serve-tests job) —
@@ -119,7 +119,7 @@ jobs:
       - run: pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
       - run: pip install nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1
       - run: pip install --no-build-isolation torch_scatter==2.1.2
-      - run: pip install pyvista==0.49.1 numpy==2.4.6 scipy==1.17.1 shapely==2.2.0 PyYAML==6.0.3
+      - run: pip install pyvista==0.49.1 numpy==2.4.6 scipy==1.17.1 shapely==2.2.0 PyYAML==6.0.3 scikit-image==0.26.0
       - run: pip install -r requirements-dev.txt
       - run: pip install -e .
       - run: python scripts/run_gate_negative.py
