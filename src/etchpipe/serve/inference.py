@@ -1,8 +1,17 @@
 """W6-08: `/predict` 실모델 추론 — champion 로드(레지스트리), t=0 메시 구성(ViennaPS,
 순수 기하 — 실제 식각 시뮬레이션은 안 함), 자기회귀 롤아웃, cd/depth/taper 계산.
-`app.py`(FastAPI 라우팅)와 분리해 viennaps/physicsnemo 의존을 한 곳에 모은다 —
-`ps.MakeTrench`는 함수 안에서 지연 임포트(viennaps 없는 환경에서도 이 모듈의 나머지는
-import 가능하게, `eval.load_model_a`의 physicsnemo 지연 임포트와 같은 이유).
+`app.py`(FastAPI 라우팅)와 분리해 viennaps/physicsnemo 의존을 한 곳에 모은다.
+
+**무거운 의존성(torch/physicsnemo/viennaps/pyvista/shapely/scipy)은 전부 함수 안에서
+지연 임포트한다** [확인, 2026-11-13 — `scripts/run_pipeline_smoke.py`(더미 모델 전용,
+가벼운 CI job)가 `etchpipe.serve.app`을 import만 해도 실패하는 걸 실제 GitHub Actions
+에서 처음 발견: 이 모듈이 모듈 최상단에서 `etl`/`eval`/`train.rollout`/`torch`를 import해
+`pipeline-smoke` job(`requirements-dev.txt`만 설치)이 깨졌었다]. `import`만으로는 아무
+무거운 패키지도 안 당겨오고, `load_champion`/`predict_recipe`를 실제로 호출할 때만
+필요해진다 — `ChampionUnavailable`과 마찬가지로 더미/목(mock) 기반 테스트는 여전히
+가볍게 돈다. 함수 본문 안의 지연 import 때문에 타입 힌트도
+`from __future__ import annotations`로 전부 문자열 평가로 미룬다(그래야
+`torch.Tensor` 같은 어노테이션이 모듈 로드 시점에 `torch` 없이도 안 터짐).
 
 **t=0 메시를 ViennaPS로 만드는 이유** [확인, 2026-11-12]: 실제 t=0 점 밀도·분포는
 ViennaLS 레벨셋 메싱 결과라(레시피별 점 개수가 다름, 실측 확인) 순수 Python으로
@@ -10,24 +19,18 @@ ViennaLS 레벨셋 메싱 결과라(레시피별 점 개수가 다름, 실측 �
 않아 빠르다(ray tracing 없음).
 """
 
+from __future__ import annotations
+
 import pathlib
 import tempfile
+from typing import TYPE_CHECKING
 
 import numpy as np
-import torch
 
-from etchpipe.etl.etl import (
-    THETA_KEYS,
-    auto_yr,
-    load_snapshot,
-    outer_path,
-    remove_self_crossing_loops,
-    to_graph,
-)
-from etchpipe.eval.eval import load_model_a
-from etchpipe.eval.metrics import cd_profile, depth, mask_from_points, taper_angle_deg
 from etchpipe.registry.registry import Registry
-from etchpipe.train.rollout import lines_from_edge_index, rollout
+
+if TYPE_CHECKING:
+    import torch
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 REGISTRY_ROOT = REPO_ROOT / "registry"
@@ -64,6 +67,8 @@ def load_champion() -> dict:
     if not reg.verify_artifact(model_id, artifact_path):
         raise ChampionUnavailable(f"아티팩트 무결성 검증 실패: {model_id}")
     card = reg.load_card(model_id)
+    from etchpipe.eval.eval import load_model_a  # 지연 임포트(torch/physicsnemo)
+
     model, _note, norm = load_model_a(artifact_path)
     _cache["champion"] = {"model_id": model_id, "model": model, "norm": norm, "card": card}
     return _cache["champion"]
@@ -73,7 +78,10 @@ def build_initial_graph(
     mask_width: float, mask_height: float, theta: np.ndarray
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """`ps.MakeTrench`로 t=0 표면을 만들고 `etl.to_graph`로 그래프화."""
+    import torch
     import viennaps as ps  # 지연 임포트(모듈 docstring 참고)
+
+    from etchpipe.etl.etl import load_snapshot, to_graph  # 지연 임포트(pyvista/shapely/scipy)
 
     ps.Length.setUnit("um")
     ps.Time.setUnit("min")
@@ -104,6 +112,10 @@ def predict_recipe(theta_dict: dict[str, float], times: list[float]) -> dict:
     모델은 `step_min`(1분) 단위로만 학습됐다]: 각 요청 시간을 가장 가까운 정수
     스텝(`round(t/STEP_MIN)`, 최소 1)으로 반올림하고, `MAX_STEPS`(학습 데이터 상한)를
     넘으면 잘라낸다(`clamped=True`로 표시) — 분 단위 보간은 검증된 적 없어 하지 않는다."""
+    from etchpipe.etl.etl import THETA_KEYS, auto_yr, outer_path, remove_self_crossing_loops
+    from etchpipe.eval.metrics import cd_profile, depth, mask_from_points, taper_angle_deg
+    from etchpipe.train.rollout import lines_from_edge_index, rollout  # 지연 임포트(torch)
+
     champion = load_champion()
     model, norm, card = champion["model"], champion["norm"], champion["card"]
 

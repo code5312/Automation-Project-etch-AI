@@ -16,8 +16,8 @@
 
 | 증거 | 합격 기준 | 위치 | 주차 | 상태 |
 |---|---|---|---|---|
-| ① 게이트 차단 | 정상 통과, 노이즈·1에폭 모델 차단, 해시·골든 변조 차단(코드 2) | `reports/evidence/` + CI `gate-negative` 로그 | 2(더미), 5(실모델) | [ ] |
-| ② 재학습 완주 | 모니터→생성→변환→학습→게이트→승격, 무개입 **자동 반복(최대 4회, ADR-0002)** 포함 완주, 전/후 오차 | `reports/evidence/retrain_*.json` | 6 | [ ] |
+| ① 게이트 차단 | 정상 통과, 노이즈·1에폭 모델 차단, 해시·골든 변조 차단(코드 2) | `reports/evidence/` + CI `gate-negative` 로그 | 2(더미), 5(실모델) | [x] W5-09 |
+| ② 재학습 완주 | 모니터→생성→변환→학습→게이트→승격, 무개입 **자동 반복(최대 4회, ADR-0002)** 포함 완주, 전/후 오차 | `reports/evidence/retrain_*.json` | 6 | [ ] W6-05/06 미착수(오케스트레이션 코드만 있음) |
 
 ---
 
@@ -74,7 +74,7 @@
 
 목표: 본 데이터 생성을 **백그라운드로 먼저 시작**하고, 그동안 ETL을 완성한다.
 
-- [ ] W3-01 S1 결과로 `configs/sim/base.yaml` 확정(`depth_max`, 범위, K, rays), `make_recipes`로 레시피 N건, `splits.json`(train/val/test/ood/golden) — 1차 확정: `configs/sim/base.yaml`(2026-11-03). N=410(300/40/40/20/10) 시간예산 [확인, `W3-01_probe8_depthmax_kind.md`, parallelism=2 기준 약 2.7일]. `rays`·`grid_delta`는 정확도-속도 트레이드오프 검증 없이 [미확인] 상태로 보류 — 재검토 트리거: W3-03 ETL에서 표면 노이즈/부호 SDF 이상, 또는 W4 롤아웃 오차가 과도할 때. `make_recipes`/`make_splits` 실행 완료(2026-11-03) — 증거: `reports/evidence/W3-01_recipes_splits.md`(`scripts/gen_splits.py`, `data/recipes.json` 400건, `data/splits.json` train300/val40/test40/ood20, probe8 r0000~r0007 파라미터 불변 확인). 아직 남음: 골든셋(10) 선정 규칙(중심5·경계3·극단2) 알고리즘 결정 — ADR-0001 동결 스키마상 `splits.json`에 golden 키 추가 안 함.
+- [x] W3-01 S1 결과로 `configs/sim/base.yaml` 확정(`depth_max`, 범위, K, rays), `make_recipes`로 레시피 N건, `splits.json`(train/val/test/ood/golden) — 1차 확정: `configs/sim/base.yaml`(2026-11-03). N=410(300/40/40/20/10) 시간예산 [확인, `W3-01_probe8_depthmax_kind.md`, parallelism=2 기준 약 2.7일]. `rays`·`grid_delta`는 정확도-속도 트레이드오프 검증 없이 [미확인] 상태로 보류 — 재검토 트리거: W3-03 ETL에서 표면 노이즈/부호 SDF 이상, 또는 W4 롤아웃 오차가 과도할 때. `make_recipes`/`make_splits` 실행 완료(2026-11-03) — 증거: `reports/evidence/W3-01_recipes_splits.md`(`scripts/gen_splits.py`, `data/recipes.json` 400건, `data/splits.json` train300/val40/test40/ood20, probe8 r0000~r0007 파라미터 불변 확인). **갱신(체크리스트 재검토, 2026-11-12)**: 당시 "아직 남음"이던 골든셋(10) 선정 규칙은 W3-06(2026-11-08)에서 해결됨(`select_golden_recipes`, 중심5·경계3·극단2) — 이 항목의 체크박스가 그동안 반영 안 된 채 남아 있던 걸 뒤늦게 발견·수정.
 - [x] W3-02 본 데이터 생성 시작(kind Job 또는 `xargs -P`), 진행률·실패율 요약 스크립트, 실패 건 재시도
   — 완료(2026-11-05) 증거: `reports/evidence/W3-02_gen_complete.md`(40/40 shard 전부 `Succeeded`,
   실패 0건, 400/400 run `meta.json` 완전성 확인, 로컬·GitHub Release·HF 3중 백업).

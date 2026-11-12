@@ -83,3 +83,31 @@ PYTHONPATH=src python -m pytest tests/unit/test_serve.py -q (etch-serve:0.1)
 CI: `.github/workflows/pr-check.yml`에 `serve-tests` job 신설(requirements-serve.txt
 전체 설치 후 `test_serve.py` 실행 — mock 기반이라 레지스트리/실제 체크포인트 없이도
 통과).
+
+## 후속 수정(2026-11-13): `pipeline-smoke` CI job 깨짐 — 실제 GitHub Actions에서 발견
+
+브랜치를 처음 push한 뒤 실제 GitHub Actions에서 `pipeline-smoke` job이
+`ModuleNotFoundError: No module named 'shapely'`로 실패함을 발견 — 재학습 루프와는
+무관한 문제였다. 원인 두 가지:
+
+1. **`inference.py`가 모듈 최상단에서 `torch`/`etl`/`eval`/`train.rollout`을
+   import**하고 있어서, `pipeline-smoke`(더미 모델 전용, `requirements-dev.txt`만
+   설치하는 가벼운 job)가 `etchpipe.serve.app`을 import만 해도 무거운 의존성이
+   필요해졌다. → `inference.py`의 무거운 import를 전부 함수 안으로 지연시키고
+   `from __future__ import annotations`로 타입 힌트도 미룸(viennaps는 이미 그렇게
+   돼 있었음 — 나머지도 같은 패턴으로 맞춤).
+2. **`shapely`가 `pyproject.toml`의 패키지 의존성에 원래부터 빠져 있었다**(W3-11에서
+   `requirements-train.txt`에만 추가됨) — `run_pipeline_smoke.py` 자신의 1단계(ETL)가
+   `etl.py`를 직접 쓰는데, `etl.py`가 내부 경계 필터링에 shapely가 꼭 필요해서
+   `pip install -e .`만으로는 패키지가 실제로 안 돌아갔다. → `pyproject.toml`
+   `dependencies`에 `shapely==2.2.0` 추가.
+3. 위 두 가지를 고쳐도 `run_pipeline_smoke.py`의 6단계(`/predict` 실호출)는 실제
+   champion·torch가 필요해 여전히 막힌다 — 이 스모크 테스트는 "더미 모델 전용"이
+   원래 취지라, `tests/unit/test_serve.py`와 같은 패턴으로 `load_champion`/
+   `predict_recipe`를 더미로 모킹하도록 수정.
+
+검증: `python:3.11-slim` + `requirements-dev.txt` + `pip install -e .`만 설치한
+(실제 `pipeline-smoke` job과 동일한) 컨테이너에서 `python scripts/run_pipeline_smoke.py`
+실행 → `pipeline-smoke 통과` 확인. 실제 champion으로의 end-to-end `/predict`도
+리팩터링 후 재확인(depth=14.66 — 이전과 동일값, 동작 변화 없음 확인).
+`PYTHONPATH=src python -m pytest tests/unit -q`(fastapi 포함) → 201 passed.
