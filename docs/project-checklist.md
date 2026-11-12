@@ -387,7 +387,15 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   register_champion.py`로 `mgn_tuned`를 레지스트리 첫 champion으로 등록. 실제
   end-to-end `/predict` 호출 성공(cd/depth/taper_deg 실측) — 증거:
   `reports/evidence/W6-08_predict_real_model.md`. CI `serve-tests` job 신설.
-- [ ] W6-09 오류 응답 정제(경로·스택 미노출), 이상 입력 100개 퍼징에서 5xx 없음
+- [x] W6-09 오류 응답 정제(경로·스택 미노출), 이상 입력 100개 퍼징에서 5xx 없음
+  — **완료(2026-11-12)**: 퍼징으로 실제 버그 3종 발견·수정 — ① `mask_width`/
+  `mask_height` 극단값(1e9)에서 ViennaPS 메시 생성이 멈춤 → `le=25.0` 상한 추가,
+  ② `gt`/`le`만으로 NaN/Infinity를 못 걸러내 추론까지 흘러가 응답 직렬화에서 500 →
+  `allow_inf_nan=False` 추가, ③ FastAPI 기본 422 핸들러가 거부된 원본값을 echo해서
+  그 자체가 NaN/Infinity면 에러 응답도 500 → `RequestValidationError` 전용 핸들러로
+  원본값 제외. 부수 발견: `BaseHTTPMiddleware`가 예외 핸들러 호출을 막아 순수 ASGI
+  미들웨어로 교체. `scripts/fuzz_predict.py`로 100개 퍼징 — 5xx 0건. 증거:
+  `reports/evidence/W6-09_error_sanitization_fuzz.md`.
 - [ ] W6-10 `docker-compose.yml`, 로컬 직접 실행 문서화, 두 방식 모두 `/health` 확인, 지연 측정(조건 병기)
 
 ### ③ 모델 B (마지막, 줄일 수 있음)

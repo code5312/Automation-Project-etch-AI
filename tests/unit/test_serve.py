@@ -170,6 +170,83 @@ def test_predict_empty_recipes_is_422() -> None:
     assert resp.status_code == 422
 
 
+def test_predict_mask_width_above_ceiling_is_422() -> None:
+    # W6-09: mask_width가 극단적으로 크면(실측: ViennaPS 메시 생성이 멈추거나 죽음)
+    # 추론 단계까지 못 가고 여기서 막혀야 한다.
+    bad_recipe = dict(_RECIPE, mask_width=1e9)
+    resp = client.post(
+        "/predict", json={"recipes": [bad_recipe], "times": [0.5]}, headers={"x-api-key": API_KEY}
+    )
+    assert resp.status_code == 422
+
+
+def test_predict_flux_above_ceiling_is_422() -> None:
+    bad_recipe = dict(_RECIPE, ion_flux=1e12)
+    resp = client.post(
+        "/predict", json={"recipes": [bad_recipe], "times": [0.5]}, headers={"x-api-key": API_KEY}
+    )
+    assert resp.status_code == 422
+
+
+def _post_raw(body_text: str):
+    return client.post(
+        "/predict", content=body_text,
+        headers={"x-api-key": API_KEY, "content-type": "application/json"},
+    )
+
+
+def test_predict_nan_field_is_422_not_500() -> None:
+    # W6-09 퍼징으로 발견: gt=0/le=...만으로는 NaN을 못 걸러내 실제 추론까지 흘러갔다
+    # (출력이 NaN이 돼 JSON 직렬화 단계에서 500). allow_inf_nan=False로 입력에서 막는다.
+    body = '{"recipes": [{"ion_flux": NaN, "etchant_flux": 4500.0, "oxygen_flux": 800.0, "ion_mean_energy": 100.0, "ion_exponent": 300.0, "mask_width": 10.0, "mask_height": 10.0}], "times": [0.5]}'  # noqa: E501
+    resp = _post_raw(body)
+    assert resp.status_code == 422
+
+
+def test_predict_infinity_field_is_422_not_500() -> None:
+    body = '{"recipes": [{"ion_flux": Infinity, "etchant_flux": 4500.0, "oxygen_flux": 800.0, "ion_mean_energy": 100.0, "ion_exponent": 300.0, "mask_width": 10.0, "mask_height": 10.0}], "times": [0.5]}'  # noqa: E501
+    resp = _post_raw(body)
+    assert resp.status_code == 422
+
+
+def test_predict_nan_time_is_422() -> None:
+    body = '{"recipes": [{"ion_flux": 10.0, "etchant_flux": 4500.0, "oxygen_flux": 800.0, "ion_mean_energy": 100.0, "ion_exponent": 300.0, "mask_width": 10.0, "mask_height": 10.0}], "times": [NaN]}'  # noqa: E501
+    resp = _post_raw(body)
+    assert resp.status_code == 422
+
+
+def test_predict_unexpected_inference_error_is_422_not_500(monkeypatch) -> None:
+    # W6-09: Field 상한을 다 통과했지만 추론 단계에서만 드러나는 오류는 422로 돌리고
+    # 절대 5xx를 내지 않는다. 에러 메시지에 경로·스택이 안 보여야 한다.
+    def _boom(theta_dict, times):
+        raise RuntimeError("/app/some/internal/path.py line 42 boom")
+
+    monkeypatch.setattr("etchpipe.serve.app.predict_recipe", _boom)
+    resp = client.post(
+        "/predict", json={"recipes": [_RECIPE], "times": [0.5]}, headers={"x-api-key": API_KEY}
+    )
+    assert resp.status_code == 422
+    assert "/app/" not in resp.text
+    assert "Traceback" not in resp.text
+
+
+def test_model_unexpected_error_falls_back_to_sanitized_500(monkeypatch) -> None:
+    # /model은 ChampionUnavailable만 따로 잡는다 — 그 외 예외는 전역 핸들러(
+    # ServerErrorMiddleware)가 받아서 경로·스택 없이 500으로 바꿔야 한다(2차 방어막).
+    # 기본 TestClient(raise_server_exceptions=True)는 테스트 편의상 이 핸들러를 건너
+    # 뛰고 예외를 그대로 올리므로, 이 테스트만 raise_server_exceptions=False로 돌려
+    # 실제 배포(uvicorn)와 같은 응답을 확인한다.
+    def _boom():
+        raise RuntimeError("/app/some/internal/path.py line 99 kaboom")
+
+    monkeypatch.setattr("etchpipe.serve.app.load_champion", _boom)
+    lenient_client = TestClient(app, raise_server_exceptions=False)
+    resp = lenient_client.get("/model", headers={"x-api-key": API_KEY})
+    assert resp.status_code == 500
+    assert "/app/" not in resp.text
+    assert "Traceback" not in resp.text
+
+
 def _tiny_middleware_app(middleware_cls, **kwargs) -> Starlette:
     async def ok(request):
         return PlainTextResponse("ok")
