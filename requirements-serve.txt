@@ -1,9 +1,51 @@
 # 서빙 환경 (C7). CPU 전용. 컨테이너 전용 — 호스트에 직접 설치하지 않는다.
-# 2026-10-27 python:3.11-slim 컨테이너에서 실제 설치 확인(2단계). 증거: reports/evidence/W1-03_serve_install.md
-#   1) pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
-#      (CPU 휠 인덱스를 쓰지 않으면 PyPI torch가 CUDA 라이브러리(~10GB)를 끌어온다)
-#   2) pip install fastapi==0.162.0 uvicorn==0.54.0 pydantic==2.14.1 numpy==2.4.6
+# 2026-10-27 python:3.11-slim 컨테이너에서 최초 설치 확인(2단계, torch+fastapi만). 증거:
+# reports/evidence/W1-03_serve_install.md
+#
+# **갱신(2026-11-12, W6-08, 사용자 결정)**: 그 시점엔 아직 모델 아키텍처가 확정되기
+# 전이라 nvidia-physicsnemo/torch_geometric/torch_scatter가 빠져 있었다 —
+# `MeshGraphNetModel`이 `physicsnemo.models.meshgraphnet.MeshGraphNet`을 직접 import해서
+# 쓰기 때문에, 저게 없으면 실제 champion 체크포인트를 서빙에서 로드할 수 없다(발견:
+# `/predict` 실모델 연결 작업 중). 설치 순서는 requirements-train.txt와 동일한 이유로
+# 고정(torch_scatter는 torch가 먼저 있어야 --no-build-isolation 빌드 가능):
+#   1) pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
+#   2) pip install nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1
+#   3) pip install --no-build-isolation torch_scatter==2.1.2   (build-essential 필요)
+#   4) pip install ViennaPS==4.5.0 ViennaLS==5.8.5
+#   5) pip install pyvista==0.49.1 shapely==2.2.0 scipy==1.17.1 PyYAML==6.0.3
+#   6) pip install fastapi==0.162.0 uvicorn==0.54.0 pydantic==2.14.1 numpy==2.4.6
+#
+# **ViennaPS도 추가(같은 날, 사용자 결정)**: `/predict`가 Θ만으로 t=0 초기 메시를
+# 만들려면 `ps.MakeTrench`(순수 기하 구성, 실제 식각 시뮬레이션은 안 함)가 필요하다 —
+# 그 메시의 점 밀도·분포가 ViennaLS 레벨셋 메싱 결과라 순수 Python으로 재현 불가(실측
+# 확인, 2026-11-12). "환경 3분리" 원칙에서 벗어나지만, torch+physicsnemo+ViennaPS를
+# 같은 환경에 두고 import 테스트해 충돌 없음을 확인했다(python:3.11-slim, 2026-11-12).
+# 런타임(apt) 전제조건은 requirements-sim.txt와 동일: libgl1 libxrender1 libxext6
+# libsm6 libice6 libx11-6 (docker/Dockerfile.serve에 반영됨).
+#
+# **pyvista·shapely·scipy·PyYAML도 추가**: `inference.py`가 `etl.py`(pyvista·shapely·
+# scipy)와 `eval.py`/`train.run_train`(PyYAML)을 전부 거쳐간다 — requirements-train.txt와
+# 동일 버전으로 맞췄다. 전부 실제 빌드에서 하나씩 빠뜨렸다가(import 테스트는 torch/
+# physicsnemo/viennaps만 확인했었음) 2026-11-12 `etch-serve:0.1`에서
+# `pytest tests/unit/test_serve.py`를 처음 돌려보면서 순서대로 발견 — 이제
+# `src/etchpipe/serve/inference.py`가 import하는 모듈들의 전체 의존 체인을 다 덮었다.
+#
+# **torchvision도 추가**: `physicsnemo.models`가 `timm`을 거쳐 `torchvision`을
+# import하는데, torchvision 없이(또는 버전 안 맞게 다른 패키지가 끌어온 걸 쓰면) 네이티브
+# 연산자(`torchvision::nms`) 등록이 깨진다(`RuntimeError: operator torchvision::nms
+# does not exist`, 2026-11-12 실측) — requirements-train.txt와 똑같이 torch와 **같은
+# pip 설치에서** 짝 맞춰 설치해야 한다(따로 설치하면 다른 버전이 섞여 들어갈 위험).
 torch==2.14.1
+torchvision==0.29.1
+nvidia-physicsnemo==2.2.2
+torch_geometric==2.8.1
+torch_scatter==2.1.2
+ViennaPS==4.5.0
+ViennaLS==5.8.5
+pyvista==0.49.1
+shapely==2.2.0
+scipy==1.17.1
+PyYAML==6.0.3
 fastapi==0.162.0
 uvicorn==0.54.0
 pydantic==2.14.1

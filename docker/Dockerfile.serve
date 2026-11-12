@@ -1,0 +1,28 @@
+# 서빙 전용 이미지(W6-08에서 처음 필요 — /predict 실모델 연결에 nvidia-physicsnemo 필요,
+# t=0 초기 메시 구성에 ViennaPS 필요 — requirements-serve.txt 주석 참고).
+# Dockerfile.train과 같은 이유로 코드는 바깥에서 볼륨 마운트(src/를 자주 바꿔가며 개발).
+#
+# 설치 순서는 requirements-serve.txt 주석 그대로(torch_scatter는 torch가 먼저 설치되어
+# 있어야 --no-build-isolation 소스 빌드가 가능). libgl1 등은 ViennaLS가 쓰는 VTK
+# 바이너리에 필요(requirements-sim.txt/Dockerfile.sim과 동일 이유).
+FROM python:3.11-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.14.1 torchvision==0.29.1 \
+    && pip install --no-cache-dir nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1 \
+    && pip install --no-cache-dir --no-build-isolation torch_scatter==2.1.2 \
+    && pip install --no-cache-dir ViennaPS==4.5.0 ViennaLS==5.8.5 \
+    && pip install --no-cache-dir pyvista==0.49.1 shapely==2.2.0 scipy==1.17.1 PyYAML==6.0.3 \
+    && pip install --no-cache-dir fastapi==0.162.0 uvicorn==0.54.0 pydantic==2.14.1 \
+        numpy==2.4.6
+
+# 테스트 실행용(requirements-dev.txt와 버전 동일 — CI와 다른 버전으로 "통과"하는 걸 막음).
+RUN pip install --no-cache-dir ruff==0.17.3 pytest==9.1.1 httpx==0.28.1
+
+WORKDIR /app
+ENV PYTHONPATH=/app/src

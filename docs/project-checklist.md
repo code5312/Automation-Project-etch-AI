@@ -373,7 +373,20 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
 - [ ] W6-07 `retrain-demo` 수동 워크플로(소규모 설정)
 
 ### ② 서빙 (다음)
-- [ ] W6-08 `/predict` 실모델 연결(champion 로드, CPU), 입력 검증, 범위 경고(`in_range`), 2배 초과 422, 키 인증, 요청 크기·속도 제한 → FR-12, FR-13
+- [x] W6-08 `/predict` 실모델 연결(champion 로드, CPU), 입력 검증, 범위 경고(`in_range`), ~~2배 초과 422~~, 키 인증, 요청 크기·속도 제한 → FR-12, FR-13
+  — **DOC-01(2026-11-12)**: "2배 초과 422"는 `project-definition.md` §4("범위 밖 입력
+  **경고**")·`project-design.md` §C7("유효 범위 밖은 **거부하지 않고** `in_range=false`로
+  경고만 한다")와 정면으로 어긋남 — 상위 문서 둘 다 거부를 명시적으로 금지. 우선순위
+  규칙(definition > design > checklist)에 따라 체크리스트 쪽을 따른다: 범위 밖이어도
+  거부하지 않고 `in_range=false`만 표시(사용자 결정).
+  — **완료(2026-11-12)**: `src/etchpipe/serve/inference.py`(champion 로드·t=0 메시
+  구성·롤아웃·cd/depth/taper) + `app.py` 재작성(입력 검증 Field(gt=0)·배치/시간 개수
+  상한·요청 크기 413·속도 제한 429). `requirements-serve.txt`에 physicsnemo·ViennaPS
+  등 대거 추가(환경 3분리에서 벗어남, 사용자 결정) — t=0 메시의 ViennaLS 레벨셋 메싱
+  결과를 순수 Python으로 재현 못 해서 ViennaPS가 서빙에도 필요했음. `scripts/
+  register_champion.py`로 `mgn_tuned`를 레지스트리 첫 champion으로 등록. 실제
+  end-to-end `/predict` 호출 성공(cd/depth/taper_deg 실측) — 증거:
+  `reports/evidence/W6-08_predict_real_model.md`. CI `serve-tests` job 신설.
 - [ ] W6-09 오류 응답 정제(경로·스택 미노출), 이상 입력 100개 퍼징에서 5xx 없음
 - [ ] W6-10 `docker-compose.yml`, 로컬 직접 실행 문서화, 두 방식 모두 `/health` 확인, 지연 측정(조건 병기)
 
