@@ -24,13 +24,53 @@ jobs:
         with:
           python-version: "3.11"
       # etchpipe가 pyvista(ETL용)에 의존 — VTK 바이너리에 필요(W1-03 증거와 동일 이유).
+      # build-essential은 torch_scatter 소스 빌드용(아래).
       - run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
-            libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6
+            libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6 build-essential
+      # requirements-train.txt(W4-01~): test_rollout.py/test_eval.py/test_train_*.py가
+      # torch/physicsnemo/torch_geometric을 모듈 최상단에서 import한다 — 2026-11-12에야
+      # 발견: 이 job이 지금까지 그 의존성 없이 돌고 있었다(W4-01 이후 CI가 한 번도 이
+      # 파일들을 실제로 통과시키지 못했을 가능성). requirements-train.txt 주석의 설치
+      # 순서를 그대로 따른다(torch_scatter는 torch가 먼저 있어야 --no-build-isolation
+      # 빌드 가능 — 한 번에(-r) 설치는 검증 안 됨).
+      - run: pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
+      - run: pip install nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1
+      - run: pip install --no-build-isolation torch_scatter==2.1.2
+      - run: pip install pyvista==0.49.1 numpy==2.4.6 scipy==1.17.1 shapely==2.2.0 PyYAML==6.0.3 scikit-image==0.26.0
       - run: pip install -r requirements-dev.txt
       - run: pip install -e .
-      - run: pytest tests/unit -v
+      # test_serve.py는 fastapi 등 서빙 전용 의존성이 필요(아래 serve-tests job) —
+      # train 환경에는 안 설치하므로 여기선 뺀다(기존 관례 그대로, 2026-11-12 재확인).
+      - run: pytest tests/unit -v --ignore=tests/unit/test_serve.py
+
+  serve-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # W6-08(2026-11-12): /predict가 실제 champion을 로드하므로 requirements-serve.txt
+      # 전체(torch+physicsnemo+ViennaPS까지)가 필요하다 — docker/Dockerfile.serve와 동일
+      # 설치 순서. 다만 test_serve.py 자체는 load_champion/predict_recipe를 모킹해서
+      # 레지스트리·실제 체크포인트 없이도 통과한다(HTTP 레이어만 검증).
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6 build-essential
+      - run: pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
+      - run: pip install nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1
+      - run: pip install --no-build-isolation torch_scatter==2.1.2
+      - run: pip install ViennaPS==4.5.0 ViennaLS==5.8.5
+      - run: pip install pyvista==0.49.1 shapely==2.2.0 scipy==1.17.1 PyYAML==6.0.3
+      - run: pip install fastapi==0.162.0 uvicorn==0.54.0 pydantic==2.14.1 numpy==2.4.6
+      - run: pip install -r requirements-dev.txt
+      - run: pip install -e .
+      - env:
+          ETCH_API_KEY: test-key-not-for-production
+        run: pytest tests/unit/test_serve.py -v
 
   viennaps-smoke:
     runs-on: ubuntu-latest
@@ -70,9 +110,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # W5-08(2026-11-12): 더미 모델 대신 실제 체크포인트(runs/mgn_tuned 등)를 로드해
+      # 롤아웃하므로 unit-tests job과 같은 train 의존성이 필요하다.
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6 build-essential
+      - run: pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
+      - run: pip install nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1
+      - run: pip install --no-build-isolation torch_scatter==2.1.2
+      - run: pip install pyvista==0.49.1 numpy==2.4.6 scipy==1.17.1 shapely==2.2.0 PyYAML==6.0.3 scikit-image==0.26.0
       - run: pip install -r requirements-dev.txt
       - run: pip install -e .
       - run: python scripts/run_gate_negative.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-negative-report
+          path: build/gate_negative_report.json
 
   forbidden-expressions:
     runs-on: ubuntu-latest

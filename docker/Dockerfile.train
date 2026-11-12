@@ -1,0 +1,27 @@
+# 학습·평가·ETL 전용 이미지(W4-03에서 처음 필요 — MeshGraphNet 연결에 nvidia-physicsnemo 필요).
+# 의존성만 담는다(코드는 바깥에서 볼륨 마운트) — 학습 코드는 W4 내내 자주 바뀌므로, sim
+# 이미지(코드 바로 COPY)와 달리 매번 재빌드하지 않고 `docker run -v`로 src/를 마운트해 쓴다.
+#
+# 설치 순서는 requirements-train.txt 주석 그대로(torch_scatter는 torch가 먼저 설치되어
+# 있어야 --no-build-isolation 소스 빌드가 가능 — 한 번에 -r 설치하면 실패, W1-03_train_install.md
+# 에서 실측 확인).
+FROM python:3.11-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.14.1 torchvision==0.29.1 \
+    && pip install --no-cache-dir nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1 \
+    && pip install --no-cache-dir --no-build-isolation torch_scatter==2.1.2 \
+    && pip install --no-cache-dir pyvista==0.49.1 numpy==2.4.6 scipy==1.17.1 \
+    && pip install --no-cache-dir shapely==2.2.0 PyYAML==6.0.3 \
+    && pip install --no-cache-dir scikit-image==0.26.0
+
+# 테스트 실행용(requirements-dev.txt와 버전 동일 — CI와 다른 버전으로 "통과"하는 걸 막음).
+# detect-secrets/httpx/fastapi 등 이 이미지와 무관한 나머지는 설치하지 않는다.
+RUN pip install --no-cache-dir ruff==0.17.3 pytest==9.1.1
+
+WORKDIR /app
+ENV PYTHONPATH=/app/src

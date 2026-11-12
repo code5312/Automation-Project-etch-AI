@@ -1,0 +1,30 @@
+# W4-01: 모델 A(MeshGraphNet) 학습 설정 1차 초안. processor_size=6은 GPU 팀원이 전달한 MGN
+# 초안 체크포인트(runs/mgn_draft/ckpt_mgn.pt)와 실제로 맞는 값이다[확인, 2026-11-09,
+# load_state_dict 성공으로 검증, reports/evidence/W4-06_rollout_vs_baseline.md].
+# **정정**: 한 번 12로 바꿨었는데 physicsnemo 소스상 processor_layers 개수가
+# 2*processor_size라(edge_block·node_block이 번갈아 쌓임) 체크포인트의 12개 레이어는
+# processor_size=6이 맞음 — load_state_dict 실패로 발견. 설계서 §3 C3의 제안 범위(8~15)보다
+# 작지만, 실제 작동하는 체크포인트 실측값을 따른다.
+
+seed: 20261027
+
+data:
+  dataset_hash: 4b8c0ce1bc98  # reports/evidence/W3-04_stats_dataset_hash.md
+
+model:
+  name: meshgraphnet
+  meshgraphnet:
+    input_dim_nodes: 14
+    input_dim_edges: 3
+    output_dim: 2
+    processor_size: 6     # GPU 팀원 MGN 초안 체크포인트와 load_state_dict로 검증 [확인, 2026-11-09]
+    hidden_dim_processor: 128
+    # **정정(2026-11-11)**: 초안(runs/mgn_draft/ckpt_mgn.pt, epoch=5 미수렴)은 64였지만,
+    # 팀원이 전달한 최종 후보(runs/mgn_tuned, mgn_cross_ft_ep2.pt, config.json
+    # "hidden_dim": 128)는 128로 재학습됨 [확인, runs/mgn_tuned/config.json·README.md].
+    # processor_size=6은 그대로(두 체크포인트 다 12 layers = 2*6).
+
+train:
+  loss: chamfer
+  epochs: 100   # [제안: 설계서 §5 예시값, 1주차 시간 예산(3시간 이내, W4-04)에서 재검토]
+  lr: 0.0001    # [미확인: seed 코드/PhysicsNeMo 예제 기본값 확인 전]

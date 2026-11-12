@@ -1,0 +1,25 @@
+# W6-10: 서빙 로컬 실행(compose 방식). `scripts/register_champion.py`로
+# `registry/`를 먼저 채워 둬야 한다(레지스트리는 .gitignore 대상, 로컬에만 존재).
+# ETCH_API_KEY는 환경변수로만 받는다(CLAUDE.md) — .env 파일(커밋 금지, .gitignore에
+# .env* 이미 있음)이나 셸 환경변수로 넘긴다.
+services:
+  serve:
+    image: etch-serve:0.1
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.serve
+    ports:
+      - "8000:8000"
+    environment:
+      - ETCH_API_KEY=${ETCH_API_KEY}
+    volumes:
+      - ./src:/app/src:ro
+      - ./registry:/app/registry:ro
+      - ./runs/mgn_tuned:/app/runs/mgn_tuned:ro
+    working_dir: /app
+    command: uvicorn etchpipe.serve.app:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

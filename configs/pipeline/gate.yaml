@@ -1,0 +1,26 @@
+# W5-04: 게이트 임계값(설계서 §3 C5). 변경 시 ADR 작성(CLAUDE.md 작업규칙 6).
+#
+# ADR-0004(2026-11-11)로 어떤 규칙이 실제로 PASS/BLOCK을 가르는지 재구성됨 — 아래 값은
+# `src/etchpipe/gate/gate.py::run_gate`의 같은 이름 인자로 그대로 넘기면 된다. 실제로
+# 이 파일을 읽는 호출부: `scripts/run_gate_negative.py`(W5-06/W5-08, 2026-11-12).
+gate:
+  # ① 골든 Chamfer 상한 — ADR-0004 이후 참고 지표만(passed에 영향 없음, reference_metrics
+  # 에만 기록). 그래도 모니터링용으로 "첫 정상 모델" 기준 산출: mgn_tuned(ep2, 설계서
+  # §3 C5 "GPU 팀원 최종 후보") val 40개 중앙값 Chamfer 0.388µm(ADR-0004 새 정의,
+  # reports/eval/mgn_tuned_val40_guarded/metrics.json) × 1.5 [확인, 체크리스트 W5-04
+  # 공식 그대로].
+  max_chamfer: 0.582
+
+  # ② 깊이·CD 치수 오차 — 차단(설계서 "≤5%"). grid=0.3은 configs/sim/base.yaml의
+  # sim.grid_delta와 동일(골든 채점 노트북 GRID 상수와도 일치) [확인].
+  grid: 0.3
+  max_dim_pct: 5.0
+
+  # ③ 직전 챔피언 대비 평균 오차 악화 — ADR-0004 이후 참고 지표만(차단 안 함).
+  max_regression: 0.10
+
+  # ④ 롤아웃 후반/전반 Chamfer 비율 — 차단(골든 채점 노트북 LATE_EARLY_MAX와 동일 값).
+  rollout_max_ratio: 2.0
+
+  # ⑤ 추론 시간 상한 — 경고만(차단 안 함). 아직 실측 latency 분포가 없어 비워 둔다.
+  max_latency_s: null  # [미확인: W5-01 measure_latency로 실측 후 채움]

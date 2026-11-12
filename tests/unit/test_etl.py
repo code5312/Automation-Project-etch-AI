@@ -16,7 +16,9 @@ from etchpipe.etl.etl import (
     dist_field,
     etl_run,
     metrics,
+    outer_path,
     process_dataset,
+    remove_self_crossing_loops,
     signed_dist_field,
     to_graph,
     validate_dataset,
@@ -43,6 +45,34 @@ def test_to_graph_edge_feat_is_relative_position_and_norm() -> None:
     # 0->1 방향 엣지: rel=(3,4), norm=5
     idx01 = next(i for i in range(ei.shape[1]) if ei[0, i] == 0 and ei[1, i] == 1)
     np.testing.assert_allclose(ef[idx01], [3.0, 4.0, 5.0], atol=1e-5)
+
+
+def test_outer_path_extracts_open_chain_and_ignores_side_branch() -> None:
+    # 체인: 왼쪽 위(0, x<0, 끝점) -> 왼쪽 바닥(1) -> 오른쪽 바닥(2) -> 오른쪽 위(3, x>0, 끝점)
+    # 점4는 1에서 갈라지는 가지(마스크/Si 내부 경계처럼 섞여 들어간 경우를 모사) — 끝점이지만
+    # x<0이면서 y가 점0보다 낮아 start로 안 뽑히고, BFS 경로에도 안 들어가야 한다.
+    points = np.array([
+        [-5.0, 0.0],
+        [-2.0, -5.0],
+        [2.0, -5.0],
+        [5.0, 0.0],
+        [-1.0, -2.0],
+    ])
+    lines = np.array([[0, 1], [1, 2], [2, 3], [1, 4]])
+    path = outer_path(points, lines)
+    np.testing.assert_allclose(path, points[[0, 1, 2, 3]])
+
+
+def test_remove_self_crossing_loops_replaces_crossing_with_intersection_point() -> None:
+    # 나비 모양 구간: (0,0)-(2,2) 선분과 (2,0)-(0,2) 선분이 (1,1)에서 교차한다.
+    curve = np.array([[0.0, 0.0], [2.0, 2.0], [2.0, 0.0], [0.0, 2.0], [4.0, 2.0]])
+    fixed = remove_self_crossing_loops(curve)
+    np.testing.assert_allclose(fixed, [[0.0, 0.0], [1.0, 1.0], [0.0, 2.0], [4.0, 2.0]])
+
+
+def test_remove_self_crossing_loops_no_op_when_no_crossing() -> None:
+    curve = np.array([[0.0, 0.0], [1.0, -1.0], [2.0, 0.0]])
+    np.testing.assert_allclose(remove_self_crossing_loops(curve), curve)
 
 
 def test_to_graph_material_onehot_matches_w1_s5_mapping() -> None:

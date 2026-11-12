@@ -20,19 +20,26 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 import numpy as np
 
-from etchpipe.etl.etl import THETA_KEYS, load_snapshot
+from etchpipe.etl.etl import THETA_KEYS, load_snapshot, outer_path
 from etchpipe.eval.metrics import chamfer_distance, depth_error
 from etchpipe.models.baseline import DepthMlpExtrapolationModel
 from etchpipe.models.dummy import ZeroDisplacementModel
 
 
-def _load_run(raw_dir: pathlib.Path, run_id: str) -> tuple[dict, np.ndarray, np.ndarray]:
+def _load_run(
+    raw_dir: pathlib.Path, run_id: str
+) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
+    """ADR-0004 후속 수정(2026-11-11): `pos0`는 `outer_path`로 걸러낸 표면선이 아니라
+    원본(점 순서 그대로, lines도 같이 반환) — 예측(변위 적용)이 이 원본 점 순서/개수를
+    그대로 보존하므로 예측 쪽 `outer_path`는 호출부에서 `pos0`의 `lines`로 한다.
+    `pos_final`(정답)은 여기서 바로 `outer_path`로 표면선만 추출해 반환한다."""
     run = raw_dir / run_id
     meta = json.loads((run / "meta.json").read_text())
-    pos0, *_ = load_snapshot(run / "snapshots" / "t000.vtp")
+    pos0, lines0, *_ = load_snapshot(run / "snapshots" / "t000.vtp")
     k = meta["actual_k"]
-    pos_final, *_ = load_snapshot(run / "snapshots" / f"t{k:03d}.vtp")
-    return meta, pos0, pos_final
+    pos_final_raw, lines_final, *_ = load_snapshot(run / "snapshots" / f"t{k:03d}.vtp")
+    pos_final = outer_path(pos_final_raw, lines_final)
+    return meta, pos0, lines0, pos_final
 
 
 def main() -> int:
@@ -51,9 +58,11 @@ def main() -> int:
 
     per_run = []
     for rid in splits["val"]:
-        meta, pos0, pos_final = _load_run(raw_dir, rid)
-        pred_a = model_a.predict(pos0)
-        pred_b = model_b.predict(pos0, meta["params"])
+        meta, pos0, lines0, pos_final = _load_run(raw_dir, rid)
+        # 예측은 pos0와 같은 점 순서·개수를 보존(변위만 적용)하므로 pos0의 lines로
+        # outer_path를 적용해 표면선만 뽑는다(ADR-0004 후속 수정, 2026-11-11).
+        pred_a = outer_path(model_a.predict(pos0), lines0)
+        pred_b = outer_path(model_b.predict(pos0, meta["params"]), lines0)
         per_run.append(
             {
                 "run_id": rid,

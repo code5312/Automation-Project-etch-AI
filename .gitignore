@@ -12,6 +12,10 @@ reports/*
 # git status에 잡혀 섞여 들어갈 수 있다(2026-11-03, 중단한 xargs 스파이크의 잔여 로그가
 # 실제로 이렇게 재생성된 적 있음). 증거는 .md 요약이지 원본 로그가 아니므로 막아둔다.
 reports/evidence/*.raw.log
+# 모델별 문제 추적 로그(2026-11-10부터 계속 갱신, reports/evidence와 별개) — reports/*에
+# 가려 git status에 전혀 안 잡히던 버그를 오늘 발견해서 예외 추가.
+!reports/model_issues_mgn.md
+!reports/model_issues_fno.md
 
 # 대용량 메시 (golden/·tests/fixtures/는 예외)
 *.vtp
@@ -22,6 +26,9 @@ reports/evidence/*.raw.log
 *.pt
 *.pth
 *.ckpt
+# nvidia-physicsnemo 네이티브 저장 포맷(Module.save()) — FNO 초안(W6-11) 도입으로 추가
+# (2026-11-09, ckpt_mgn.pt·FNO .mdlus 초안 파일을 runs/에 두기로 하면서 발견: 기존 규칙에 없었음)
+*.mdlus
 
 # Python
 __pycache__/
@@ -53,4 +60,20 @@ kind.exe
 # 로컬 세션/전송용 파일 (저장소 내용 아님)
 .claude/
 seed.zip
+
+# 팀원이 전달한 골든셋 채점 노트북·담당자 README(ADR-0004 근거 자료) — 작업 참고용으로만
+# 쓰고 커밋은 안 하기로 함(2026-11-11, 사용자 결정). 루트에 바로 떨어뜨려 두는 전제.
+/golden10_채점_(입력용).ipynb
+/README_FNO담당.md
+/README_MGN담당.md
+
+# W5-08(2026-11-12, 사용자 결정): CI gate-negative가 "실모델"로 돌려면 체크포인트가
+# 저장소에 있어야 한다 — /runs/와 *.pt 블랭킷 규칙에 대한 유일한 예외. mgn_tuned
+# 체크포인트 1개만 올리고(scripts/run_gate_negative.py가 로드), 다른 runs/ 산출물·다른
+# 체크포인트는 그대로 제외 상태 유지.
+!/runs/
+/runs/*
+!/runs/mgn_tuned/
+/runs/mgn_tuned/*
+!/runs/mgn_tuned/model.pt
 

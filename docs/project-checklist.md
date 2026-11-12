@@ -16,8 +16,8 @@
 
 | 증거 | 합격 기준 | 위치 | 주차 | 상태 |
 |---|---|---|---|---|
-| ① 게이트 차단 | 정상 통과, 노이즈·1에폭 모델 차단, 해시·골든 변조 차단(코드 2) | `reports/evidence/` + CI `gate-negative` 로그 | 2(더미), 5(실모델) | [ ] |
-| ② 재학습 완주 | 모니터→생성→변환→학습→게이트→승격, 무개입 **자동 반복(최대 4회, ADR-0002)** 포함 완주, 전/후 오차 | `reports/evidence/retrain_*.json` | 6 | [ ] |
+| ① 게이트 차단 | 정상 통과, 노이즈·1에폭 모델 차단, 해시·골든 변조 차단(코드 2) | `reports/evidence/` + CI `gate-negative` 로그 | 2(더미), 5(실모델) | [x] W5-09 |
+| ② 재학습 완주 | 모니터→생성→변환→학습→게이트→승격, 무개입 **자동 반복(최대 4회, ADR-0002)** 포함 완주, 전/후 오차 | `reports/evidence/retrain_*.json` | 6 | [ ] W6-05/06 미착수(오케스트레이션 코드만 있음) |
 
 ---
 
@@ -74,7 +74,7 @@
 
 목표: 본 데이터 생성을 **백그라운드로 먼저 시작**하고, 그동안 ETL을 완성한다.
 
-- [ ] W3-01 S1 결과로 `configs/sim/base.yaml` 확정(`depth_max`, 범위, K, rays), `make_recipes`로 레시피 N건, `splits.json`(train/val/test/ood/golden) — 1차 확정: `configs/sim/base.yaml`(2026-11-03). N=410(300/40/40/20/10) 시간예산 [확인, `W3-01_probe8_depthmax_kind.md`, parallelism=2 기준 약 2.7일]. `rays`·`grid_delta`는 정확도-속도 트레이드오프 검증 없이 [미확인] 상태로 보류 — 재검토 트리거: W3-03 ETL에서 표면 노이즈/부호 SDF 이상, 또는 W4 롤아웃 오차가 과도할 때. `make_recipes`/`make_splits` 실행 완료(2026-11-03) — 증거: `reports/evidence/W3-01_recipes_splits.md`(`scripts/gen_splits.py`, `data/recipes.json` 400건, `data/splits.json` train300/val40/test40/ood20, probe8 r0000~r0007 파라미터 불변 확인). 아직 남음: 골든셋(10) 선정 규칙(중심5·경계3·극단2) 알고리즘 결정 — ADR-0001 동결 스키마상 `splits.json`에 golden 키 추가 안 함.
+- [x] W3-01 S1 결과로 `configs/sim/base.yaml` 확정(`depth_max`, 범위, K, rays), `make_recipes`로 레시피 N건, `splits.json`(train/val/test/ood/golden) — 1차 확정: `configs/sim/base.yaml`(2026-11-03). N=410(300/40/40/20/10) 시간예산 [확인, `W3-01_probe8_depthmax_kind.md`, parallelism=2 기준 약 2.7일]. `rays`·`grid_delta`는 정확도-속도 트레이드오프 검증 없이 [미확인] 상태로 보류 — 재검토 트리거: W3-03 ETL에서 표면 노이즈/부호 SDF 이상, 또는 W4 롤아웃 오차가 과도할 때. `make_recipes`/`make_splits` 실행 완료(2026-11-03) — 증거: `reports/evidence/W3-01_recipes_splits.md`(`scripts/gen_splits.py`, `data/recipes.json` 400건, `data/splits.json` train300/val40/test40/ood20, probe8 r0000~r0007 파라미터 불변 확인). **갱신(체크리스트 재검토, 2026-11-12)**: 당시 "아직 남음"이던 골든셋(10) 선정 규칙은 W3-06(2026-11-08)에서 해결됨(`select_golden_recipes`, 중심5·경계3·극단2) — 이 항목의 체크박스가 그동안 반영 안 된 채 남아 있던 걸 뒤늦게 발견·수정.
 - [x] W3-02 본 데이터 생성 시작(kind Job 또는 `xargs -P`), 진행률·실패율 요약 스크립트, 실패 건 재시도
   — 완료(2026-11-05) 증거: `reports/evidence/W3-02_gen_complete.md`(40/40 shard 전부 `Succeeded`,
   실패 0건, 400/400 run `meta.json` 완전성 확인, 로컬·GitHub Release·HF 3중 백업).
@@ -138,34 +138,199 @@
 
 ## 4주차: 모델 A 학습과 롤아웃 판정
 
-- [ ] W4-01 학습 스크립트: YAML 설정 한 파일, 시드·설정·코드 SHA·패키지 버전을 `runs/`에 저장 → FR-06
-- [ ] W4-02 손실 Chamfer 구현·테스트, 학습 루프(전이쌍, 팀포싱)
-- [ ] W4-03 **소부분집합 과적합 테스트**(레시피 5개에서 손실이 0에 가깝게)
-- [ ] W4-04 본 학습(축소 모델 `processor_size=6, hidden=64`), 에폭당 시간 기록, 예산 3시간 이내 [제안]
-- [ ] W4-05 롤아웃 v1(연결 유지, 법선·엣지 재계산, 재료 이전 값 유지): K스텝 예측, val 오차 기록
-- [ ] W4-06 롤아웃 오차 vs 베이스라인(a)(b) 비교표
-- [ ] W4-07 실패 시 롤아웃 v2(호길이 재샘플링) 시도 (시간 상자: 1.5일)
+**역할 분담 결정(2026-11-09)**: MeshGraphNet·FNO의 **학습·오차율 확인·재확인**은 GPU 가용 팀원이
+담당(아래 **[GPU 팀원]** 표기 항목). 그 외(모델 초안을 파이프라인에 매핑, 전체 흐름 1회 구성·연결)는
+CPU로 계속 진행(**[CPU/매핑]** 표기). 사유: CPU 컨테이너에서 MeshGraphNet 1 epoch(레시피 5개,
+전이쌍 71개)에 150~290초 소요(호스트 CPU 경쟁 포함) — 30 epoch 과적합 테스트조차 비효율적임을
+실측 확인(`scripts/_overfit_probe_tmp.py`, 아래 W4-03 참고).
+
+팀원이 전달한 MGN 초안(`runs/mgn_draft/ckpt_mgn.pt`, epoch=5, `processor.processor_layers`
+12개)·FNO 초안(`runs/fno_draft/`, train 300·val 40 기준 val Chamfer 중앙값 0.118µm·깊이오차
+0.92% — 이미 실전급)을 분석해 입력 정규화 누락을 발견·수정(`train/loop.py`의
+`NodeEdgeNorm`/`load_norm_stats`, 2026-11-09 — `W4-02_chamfer_loss_train_loop.md` 추가
+참고). GPU 팀원은 학습 시 `train_one_epoch(..., norm=load_norm_stats("data/processed/<hash>/stats.json"))`로
+불러서 쓸 것. **processor_size 정리(정정, 2026-11-09)**: 레이어 12개를 보고 처음엔
+`processor_size=12`로 바꿨는데, W4-06에서 실제로 `load_state_dict`를 돌려보니 실패 —
+physicsnemo 소스 확인 결과 `processor_layers` 개수는 `2*processor_size`(edge_block·
+node_block이 번갈아 쌓임)라 레이어 12개는 **`processor_size=6`**이 맞음(원래 제안값과
+같음). `MeshGraphNetModel`·`configs/model/mgn_v1.yaml` 기본값을 6으로 되돌림 — 상세는
+`reports/evidence/W4-06_rollout_vs_baseline.md` 참고. **FNO 격자 y범위 정리 완료**:
+`etl.auto_yr()`을 팀원 모델 기준 −68~21로 변경(아래 W6-11 메모 참고) — 기존
+`data/processed/4b8c0ce1bc98/sdf/`는 이전 범위(−53~21)로 생성된 것이라 재생성 필요
+[미확인: 재생성 일정].
+
+- [x] W4-01 학습 스크립트: YAML 설정 한 파일, 시드·설정·코드 SHA·패키지 버전을 `runs/`에 저장 → FR-06
+  — 완료(2026-11-09) 증거: `reports/evidence/W4-01_train_script_skeleton.md`.
+  `src/etchpipe/train/run_train.py`(`init_run`), `configs/model/mgn_v1.yaml`. 새 의존성
+  `PyYAML==6.0.3` 추가(사용자 확인 후). 신규 테스트 5건 포함 `tests/unit` 86 passed.
+  실제 설정 파일로 실행해 `runs/<run_id>/{config.yaml, git_sha, packages.json}` 생성 확인.
+- [x] W4-02 손실 Chamfer 구현·테스트, 학습 루프(전이쌍, 팀포싱)
+  — 완료(2026-11-09) 증거: `reports/evidence/W4-02_chamfer_loss_train_loop.md`.
+  `src/etchpipe/train/chamfer_loss.py`(미분 가능, `torch.cdist`), `train/loop.py`
+  (`iter_transition_pairs`, `train_one_epoch`). 신규 테스트 8건 포함 `tests/unit` 94
+  passed. 토이 모델로 루프 검증(실제 MeshGraphNet 연결은 W4-03, 호스트에
+  nvidia-physicsnemo 미설치라 이번엔 확인 못 함).
+- [x] W4-03 **소부분집합 과적합 테스트**(레시피 5개에서 손실이 0에 가깝게) — **[GPU 팀원 이관,
+  2026-11-09]**. CPU(`etch-train:0.1` 컨테이너, `--memory=2g`)에서 실제 MeshGraphNet 래퍼
+  (`src/etchpipe/models/meshgraphnet.py`, processor_size=6/hidden=64)로 시도: lr=1e-3일 때
+  손실이 0.8635→0.7560(epoch 0~8)에서 plateau, 0에 가깝지 않음 확인. lr=1e-2로 재시도 중
+  (epoch 0: loss=1.0815, epoch당 150~290초, 호스트 CPU 경쟁으로 변동) 비효율 판단해 중단·이관.
+  이관 자료: `scripts/_overfit_probe_tmp.py`(임시 프로브, 미커밋), `docker/Dockerfile.train`
+  (`etch-train:0.1`, 빌드·import 검증됨), `data/processed/4b8c0ce1bc98/graphs/`(전체 400 run
+  변환 완료).
+  **업데이트(2026-11-11)**: 팀원이 실제로 이 테스트를 수행했음을 확인(사용자 전달,
+  2026-11-11) [확인, 보고값 — 수치 로그는 이 repo에 없음]. 골든10 Chamfer 0.090µm(합격
+  판정)도 "학습이 된다"는 결과로 일치. **통과 처리.**
+- [ ] W4-04 본 학습(모델 `processor_size=6, hidden=64` — GPU 팀원 초안 체크포인트와
+  `load_state_dict`로 검증[확인], 한 번 12로 잘못 바꿨다가 정정함, 2026-11-09), 에폭당
+  시간 기록, 예산 3시간 이내 [제안] — **[CPU/매핑] 배선 완료(2026-11-10)**:
+  `src/etchpipe/train/train_main.py`(`run_training`, `build_model`, CLI)로 config→모델→
+  옵티마이저→에폭 루프→체크포인트·`metrics.json` 저장→시간 예산 중단을 연결. `train_one_epoch`
+  에 `device` 인자 추가(cpu/cuda 공용, cpu는 무연산이라 하위 호환) — 증거:
+  `reports/evidence/W4-04_train_main_wiring.md`(신규 테스트 2건, 토이 모델+실제 fixture로
+  배선만 검증, `tests/unit` 97 passed). **실측(2026-11-09~10) CPU로는 예산 초과**: train
+  300개 전체는 전이쌍 4,841개/에폭, 5-recipe 프로브(71쌍, 150~290초/에폭) 환산하면
+  에폭 1번에 약 2.8~5.5시간 — 3시간 예산을 1에폭도 못 채움. **[GPU 팀원]** 아래 "GPU 실행
+  방법" 참고해 실제 실행·체크포인트 생성.
+
+  **업데이트(2026-11-10)**: 사용자가 Colab GPU로 실제 100에폭 학습을 완료했는데, val
+  롤아웃 평가(`run_rollout_comparison.py`)에서 5에폭 미수렴 초안보다 Chamfer·깊이오차가
+  둘 다 나쁘게 나옴(`reports/model_issues_mgn.md` 문제①, `reports/evidence/
+  W4-06_rollout_vs_baseline.md`) — `run_training`이 val 없이 마지막 에폭만 저장해 과적합
+  에폭을 못 걸러낸 것으로 보임. `train_main.py`에 val 평가+`ckpt_best.pt`(val 기준 최소
+  손실) 저장 추가(신규 테스트 2건, `tests/unit` 97 passed) — 증거:
+  `reports/evidence/W4-04_train_main_wiring.md` "업데이트(2026-11-10)". **[GPU 팀원]**
+  이 코드로 재학습 후 `ckpt_best.pt`를 재평가해 실제로 나아졌는지 확인 필요(아직 미실행).
+
+  **GPU 실행 방법**: `PYTHONPATH=src python -m etchpipe.train.train_main configs/model/mgn_v1.yaml --device cuda --time-budget-hours 3.5`
+  (val 자동 포함, `--val-every`로 주기 조정 가능)
+  데이터: `data/processed/4b8c0ce1bc98/{graphs/,stats.json}`(W3-04), `data/splits.json`(train
+  300개, val 40개). 출력: `runs/<run_id>/{config.yaml, git_sha, packages.json, metrics.json,
+  ckpt_last.pt, ckpt_best.pt}`. `configs/model/mgn_v1.yaml`의 `train.lr=0.0001`/`epochs=100`
+  은 [미확인: 재검토 전 기본값] — GPU 체감 속도 보고 조정 가능(사용자 확인 후).
+
+  **업데이트(2026-11-11)**: 팀원이 `runs/mgn_tuned/`(README.md/config.json/metrics/)로
+  최종 후보를 전달함 — 계보: `mgn_h128_e35_ep34.pt`("기존 모델") → train 300개로 5epoch
+  미세조정(ep0~ep4) → val 기준 `ep2` 선택(`mgn_cross_ft_ep2.pt`). **`hidden_dim_processor`가
+  64가 아니라 128로 바뀜** [확인, `runs/mgn_tuned/config.json`] — `configs/model/mgn_v1.yaml`
+  정정 완료(이 파일 참고). 골든10(팀 채점 노트북, ADR-0004 이전 정의) 결과: IoU 0.969,
+  Chamfer 0.090µm, 깊이오차 0.81%, 중간CD오차 3.01%, 롤아웃후반/전반 1.91, 선꼬임 0건,
+  판정 합격(모델 고유 검사 미확인) [확인, `runs/mgn_tuned/metrics/champion.json`].
+  **미확인**: `mgn_h128_e35_ep34.pt` 자체가 위 "100에폭 학습" 재시도의 `ckpt_best.pt`와
+  같은 산출물인지 — teammate 확인 아직 없음, 현재는 추정만 가능.
+  **업데이트(2026-11-11)**: 사용자가 CPU 추론 실행을 허가(사용자 결정 2026-11-11) —
+  `eval.py::load_model_a`가 `hidden_dim_processor`를 체크포인트 가중치 shape에서
+  자동판별하도록 수정(더 이상 config 고정값에 의존 안 함) + 체크포인트 내장 정규화
+  통계(`mu_n/sd_n/mu_e/sd_e`) 우선 사용(`norm_from_checkpoint`) — `mgn_tuned`를 실제로
+  로드·롤아웃해 W4-05/06에 반영함(아래). **이 패키지를 W4-04의 완료 체크포인트로 받아들임.**
+- [x] W4-05 롤아웃 v1(연결 유지, 법선·엣지 재계산, 재료 이전 값 유지): K스텝 예측, val 오차 기록
+  — **[CPU/매핑] 완료(2026-11-09)**: `src/etchpipe/train/rollout.py`(`rollout`,
+  `rollout_val_error`, `recompute_edge_features`, `recompute_normals`) 구현, 토이 모델로
+  연결·재료·theta 불변·t 증가를 직접 대조 검증 + 실제 fixture로 `rollout_val_error` 플러밍
+  확인 — 증거: `reports/evidence/W4-05_rollout_v1.md`(신규 테스트 6건 포함 `tests/unit` 93
+  passed).
+  **업데이트(2026-11-11)**: `mgn_tuned`(실제 학습된 체크포인트, `processor_size=6,
+  hidden=128`) 기준 val 40개 오차를 실제로 기록함 — Chamfer 평균 0.373/중앙값 0.388,
+  깊이오차 평균 1.126/중앙값 0.905(ADR-0004 새 정의 + 마스크고정+교차가드+고리제거
+  포팅 적용) — 증거: `reports/evidence/W4-06_rollout_vs_baseline.md` "mgn_tuned로
+  재실행" 절. 추론 중 발견한 버그(마스크/교차가드 없이 돌리면 Chamfer가 2배 이상
+  나빠지고 선 꼬임 14건 발생)도 같이 수정함(`train/rollout.py`에 `fix_mask`/`guard`/
+  `loop_removal` 신설).
+- [x] W4-06 롤아웃 오차 vs 베이스라인(a)(b) 비교표 — **[CPU/매핑] 완료(2026-11-09)**:
+  `scripts/run_rollout_comparison.py` 작성, GPU 팀원 MGN 초안 체크포인트(epoch=5, 미수렴)로
+  실제 실행까지 완료 — 증거: `reports/evidence/W4-06_rollout_vs_baseline.md`. 이 과정에서
+  `processor_size=12` 판단이 틀렸음을 발견·정정(6이 맞음, 위 W4-03/W4-04 메모 갱신)하고,
+  `MeshGraphNetModel`이 인코더/디코더 `hidden_dim_*`를 안 넘겨 128로 만들어지던 버그도
+  발견·수정. 결과(참고용, 미수렴 체크포인트라 게이트 근거 아님): 모델 A 롤아웃 Chamfer
+  중앙값 1.335 vs 베이스라인(b) 9.133, 깊이오차 중앙값 1.119 vs 1.910 — 베이스라인보다
+  나음.
+  **업데이트(2026-11-11)**: `mgn_tuned`(W4-04 완료 체크포인트로 받아들인 버전)로
+  재실행 완료 — 증거 같은 파일 "mgn_tuned로 재실행" 절. **D4 판정 기준은 평균으로
+  확정**(사용자 결정 2026-11-11) → **D4 통과**(0.373<0.438) — W4-07(실패 시 롤아웃
+  v2)은 착수 불필요. **"점 채우기" 미포팅 결정(사용자, 2026-11-11): 포팅하지 않음** —
+  이미 D4 통과·선 꼬임 0건으로 어떤 판정도 이걸로 안 막혀 있고, 모델 동결 결정·프로젝트
+  우선순위(게이트·재학습 자동화 > 정확도)와도 안 맞아서다. 영향(val 40개 전부에서 최종
+  스텝 선분 최대 길이 3.7~25.4µm, 전체 선분의 8~15%가 임계 0.42µm 초과)은 "알려진
+  잔존 한계"로 명시 — 상세는 W4-06 증거 "최종 결정" 절, W7/W8 데모 레시피 선정 시 참고.
+- [x] W4-07 실패 시 롤아웃 v2(호길이 재샘플링) 시도 (시간 상자: 1.5일) — **[GPU 팀원]** (D4 판정 이후,
+  필요 시) — **해당 없음(2026-11-11)**: D4 판정이 통과라 조건("실패 시")이 성립하지
+  않음. 착수 안 함.
 
 **판정 D4 (주 말)**: val 최종 스텝 Chamfer가 베이스라인 (b)보다 작으면 **통과**. 아니면 **후퇴**:
 - 후퇴안: **최종 프로파일 1장 예측** — 입력 (초기 표면, Θ) → 출력 최종 표면. 학습 쌍을 (0, K)로 바꾸고 롤아웃 제거. 게이트·평가는 최종 스텝 Chamfer 기준으로 그대로 사용 [제안]
 - 후퇴 시 `DOC-` 항목으로 정의서 §5.1·설계서 §3 C3의 롤아웃 서술을 수정하고 ADR 작성
 - 어느 쪽이든 증거 ①②는 영향 없음
 
-**게이트 G4**: 모델 A 체크포인트 1개가 val 평가를 통과한 상태로 존재한다.
+**D4 판정 결과(2026-11-11): 통과** — 기준은 평균(사용자 결정), `mgn_tuned` val 최종 스텝
+Chamfer 평균 0.373µm < 베이스라인(b) 0.438µm. 증거: `reports/evidence/
+W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프로파일 1장 예측)
+불필요, 롤아웃 구조 유지.
+
+**게이트 G4**: 모델 A 체크포인트 1개가 val 평가를 통과한 상태로 존재한다. → **충족**
+(`mgn_tuned`, D4 통과).
 
 ---
 
 ## 5주차: 평가·게이트·레지스트리 (증거 ①)
 
-- [ ] W5-01 지표 전체 구현: IoU, CD_top/mid/bot, taper, bowing, latency + 스텝 5·10·20 보고 → FR-07 / 단위 테스트 전부 통과
-- [ ] W5-02 `eval.py`: 체크포인트 + `dataset_hash` → `metrics.json`, 그림 PNG(예측 vs 정답 오버레이), 결정적, 하드웨어·시드 기록
-- [ ] W5-03 OOD 20개 평가 → 별도 표
-- [ ] W5-04 게이트 임계값 산출: 첫 정상 모델 val 중앙값 Chamfer × 1.5 → `configs/pipeline/gate.yaml` 고정(변경 시 ADR) → 설계서 §3 C5
-- [ ] W5-05 게이트 완성: 항목 1~4, 챔피언 없음 케이스, `gate_result.json`
-- [ ] W5-06 **부정 테스트 6종**(설계서 §3 C5): 정상 통과 / 노이즈 모델 차단 / 1에폭 모델 차단 / 시뮬레이터 버전 변경 데이터로 학습한 모델 차단 / `dataset_hash` 불일치(코드 2) / 골든 변조(코드 2)
-- [ ] W5-07 레지스트리 완성: `manifest.json`, `valid_range.json`, 자동 모델 카드, 승격·롤백·`history.jsonl` → FR-11
-- [ ] W5-08 CI `gate-negative`를 실모델 기준으로 교체, 로그를 아티팩트로 저장
-- [ ] W5-09 **증거 ① 제출본**: 부정 테스트 6종 결과를 `reports/evidence/W5-09_gate_negative.md`로 정리·커밋
+- [x] W5-01 지표 전체 구현: IoU, CD_top/mid/bot, taper, bowing, latency + 스텝 5·10·20 보고 → FR-07 / 단위 테스트 전부 통과
+  — **[CPU/매핑] 완료(2026-11-10)**: `src/etchpipe/eval/metrics.py`에 `mask_from_points`/
+  `mask_from_sdf`(설계서 §3 C4 "공정 비교" — 모델 A/B를 같은 래스터 마스크로 변환해 공통
+  기준으로 계산), `iou`, `cd_at_y`/`cd_profile`(top/mid/bot), `taper_angle_deg`, `bowing`,
+  `measure_latency` 추가. `src/etchpipe/train/rollout.py`에 `rollout_val_error_by_step`
+  추가(스텝 5·10·20별 보고, `rollout_val_error`는 그 위에 얇은 래퍼로 재구성) — 증거:
+  `reports/evidence/W5-01_metrics.md`. **갱신(2026-11-11)**: Chamfer 정의가
+  ADR-0004로 교체됨 — `reports/evidence/ADR-0004_chamfer_gate_rework.md`.
+- [x] W5-02 `eval.py`: 체크포인트 + `dataset_hash` → `metrics.json`, 그림 PNG(예측 vs 정답 오버레이), 결정적, 하드웨어·시드 기록
+  — **[CPU/매핑] 완료(2026-11-10)**: `src/etchpipe/eval/eval.py`(`run_eval`, `load_model_a`,
+  CLI) 신규. 스텝 5·10·20(및 최종) 지표, `plots/<run_id>.png`, `git_sha`/패키지/하드웨어/
+  시드를 `metrics.json`에 기록. 실제 epoch=99 체크포인트로 val 40개 끝까지 돌려서 확인
+  — 증거: `reports/evidence/W5-02_eval.md`.
+- [x] W5-03 OOD 20개 평가 → 별도 표
+  — **[CPU/매핑] 완료(2026-11-11)**: `eval.py`에 `--split` 인자 추가(val/test/ood).
+  `mgn_tuned`(ep2)로 OOD 20개 평가 — Chamfer 평균 2.154µm(val 대비 5.8배), 깊이오차
+  평균 13.971µm(val 대비 12.4배), 선 꼬임 0건 — 증거: `reports/evidence/W5-03_ood_eval.md`.
+- [x] W5-04 게이트 임계값 산출: 첫 정상 모델 val 중앙값 Chamfer × 1.5 → `configs/pipeline/gate.yaml` 고정(변경 시 ADR) → 설계서 §3 C5
+  — **[CPU/매핑] 완료(2026-11-11)**: `configs/pipeline/gate.yaml` 신설 —
+  `max_chamfer=0.582`(mgn_tuned val 중앙값 0.388×1.5, 체크리스트 공식 그대로 — ADR-0004
+  이후 참고 지표일 뿐 차단엔 안 쓰임), `grid=0.3`/`max_dim_pct=5.0`(②, 차단),
+  `rollout_max_ratio=2.0`(④, 차단), `max_regression=0.10`(③, 참고), `max_latency_s`는
+  미실측이라 비워 둠. **갱신(2026-11-12)**: `scripts/run_gate_negative.py`(W5-06/W5-08)가
+  이 파일을 실제로 읽어 쓴다.
+- [x] W5-05 게이트 완성: 항목 1~4, 챔피언 없음 케이스, `gate_result.json`
+  — **[CPU/매핑] 완료(2026-11-11)**: `src/etchpipe/gate/gate.py`에 `check_cd_depth_error`
+  (②), `check_champion_regression`(③, 챔피언 없으면 자동 통과), `check_latency`(⑤, 차단
+  아니고 `GateResult.warnings`에만), `write_gate_result`(`gate_result.json`) 추가.
+  `run_gate`는 새 인자를 안 주면 기존 동작 그대로(하위 호환) — 증거:
+  `reports/evidence/W5-05_W5-07_gate_registry.md`. **갱신(2026-11-11)**: ①③ 참고지표화,
+  ②(깊이/CD) 시그니처 변경, ④ 다중레시피 추가, 물리 규칙(선꼬임+모델별결함) 신설 —
+  ADR-0004, `reports/evidence/ADR-0004_chamfer_gate_rework.md`. **주의**: 설계서 §3 C5
+  "자체 테스트" 목록(노이즈/1에폭/시뮬레이터 버전 변경 모델 차단)은 ①만으로는 더 이상
+  안 막히므로, W5-06 작성 시 ②④물리 중 하나를 같이 걸어야 함.
+- [x] W5-06 **부정 테스트 6종**(설계서 §3 C5): 정상 통과 / 노이즈 모델 차단 / 1에폭 모델 차단 / 시뮬레이터 버전 변경 데이터로 학습한 모델 차단 / `dataset_hash` 불일치(코드 2) / 골든 변조(코드 2)
+  — **완료(2026-11-12)**: `scripts/run_gate_negative.py`를 실모델 기준으로 재작성.
+  데이터는 `golden/raw/`(git 커밋됨), 체크포인트는 `runs/mgn_tuned/model.pt` 1개만
+  `.gitignore` 예외로 커밋([확인] 사용자 결정). "1에폭"은 `runs/20261110T...c07d1b/
+  ckpt_last.pt`(로컬 실측, epoch=6)로, "시뮬레이터 버전 변경"은 실제 체크포인트가 없어
+  (ViennaLS 5.9.0 import 불가) 합성 대체(`SyntheticDepthBiasModel`)로 모사 — [제안,
+  2026-11-11 사용자 결정]. 6종 전부 기대대로 동작 — 증거: `reports/evidence/
+  W5-09_gate_negative.md`. **부수 발견**: CI `unit-tests`/`gate-negative` job에 torch가
+  W4-01부터 없었다(이번에 같이 고침, 아래 W5-08).
+- [x] W5-07 레지스트리 완성: `manifest.json`, `valid_range.json`, 자동 모델 카드, 승격·롤백·`history.jsonl` → FR-11
+  — **[CPU/매핑] 완료(2026-11-11)**: `src/etchpipe/registry/registry.py`에 `register`
+  (카드+valid_range.json 생성, 설계서 §10 "BLOCK 모델은 registry/에 안 씀" 반영),
+  `rollback`, `verify_artifact`(SHA-256), `compute_valid_range`, `manifest.json` 자동
+  갱신 추가 — 증거: `reports/evidence/W5-05_W5-07_gate_registry.md`.
+- [x] W5-08 CI `gate-negative`를 실모델 기준으로 교체, 로그를 아티팩트로 저장
+  — **완료(2026-11-12)**: `.github/workflows/pr-check.yml`의 `gate-negative` job에
+  `requirements-train.txt` 설치 단계(torch CPU 휠·physicsnemo·torch_geometric·
+  torch_scatter 등) 추가. **같이 고침**: `unit-tests` job도 W4-01부터 같은 이유로 torch가
+  없어 `test_rollout.py` 등 6개 파일이 실제 GH Actions에서 import 단계부터 실패했을
+  가능성이 높았음(로컬 컨테이너로만 검증돼 왔음) — 같은 설치 단계 추가. "로그를
+  아티팩트로 저장"은 `actions/upload-artifact@v4`로 `build/gate_negative_report.json`을
+  업로드하도록 추가.
+- [x] W5-09 **증거 ① 제출본**: 부정 테스트 6종 결과를 `reports/evidence/W5-09_gate_negative.md`로 정리·커밋
+  — **완료(2026-11-12)**: 작성함(코드는 사용자가 직접 커밋 — Claude는 git 명령 실행 안 함).
 
 **게이트 G5**: 증거 ①이 CI 로그와 evidence 파일로 존재한다. 이 시점에 일정이 1주 이상 밀렸으면 6주차의 FNO 범위를 줄인다.
 
@@ -176,23 +341,87 @@
 우선순위 순서로 진행한다. 시간이 모자라면 아래에서부터 줄인다.
 
 ### ① 재학습 루프 (먼저)
-- [ ] W6-01 `configs/sim/live.yaml`(드리프트 오버라이드 `Substrate.A_ie` ×1.15), `sim_config_id` 반영
-- [ ] W6-02 모니터: 신규 레시피 10개를 live 설정으로 시뮬레이션 → champion 예측과 Chamfer 비교 → `drift_threshold`(= champion 골든 Chamfer × 1.5) 초과 시 **자동 반복 루프**(ADR-0002) 트리거 → FR-09
-- [ ] W6-03 드리프트 데이터 60개 생성(train 40 / val 10 / golden_drift 10) → ETL → 새 `dataset_hash` — 루프 1차 시도의 입력
-- [ ] W6-04 **자동 반복 루프 구현(최대 4회, ADR-0002)**: 1차 champion에서 3~5에폭 미세조정 → 게이트. BLOCK이면 2차(드리프트 train 40→100개 자동 확장 재생성, ViennaPS 추가 호출) → 게이트. BLOCK이면 3차(에폭 10~15) → 4차(학습률 조정) 순서로 자동 진행. 어느 시도든 PASS면 즉시 승격하고 루프 종료, 4회 모두 BLOCK이면 champion 유지 + 알림. 시도마다 게이트 결과 기록
+- [x] W6-01 `configs/sim/live.yaml`(드리프트 오버라이드 `Substrate.A_ie` ×1.15), `sim_config_id` 반영
+  — **완료(2026-11-12)**: `run_sim()`에 `substrate_a_ie`(기본 `None`=하위호환)·
+  `sim_config_id` 인자 추가. `etch-sim:0.1`에서 `p.Substrate.A_ie` 실존·기본값 7.0 확인
+  후 K=3 스모크 테스트로 끝까지 실행 검증 — 증거: `reports/evidence/W6-01_drift_config.md`.
+- [x] W6-02 모니터: 신규 레시피 10개를 live 설정으로 시뮬레이션 → champion 예측과 Chamfer 비교 → `drift_threshold`(= champion 골든 Chamfer × 1.5) 초과 시 **자동 반복 루프**(ADR-0002) 트리거 → FR-09
+  — **완료(2026-11-12)**: `src/etchpipe/retrain/monitor.py`(`mean_chamfer_over_recipes`/
+  `check_drift`) + `tests/unit/test_monitor.py`(3종). 실제 10개 레시피 실측:
+  `champion_golden_chamfer=0.4227`, `drift_threshold=0.6341`, `mean_chamfer=0.4461` →
+  **트리거 안 됨**(`Substrate.A_ie`×1.15 드리프트를 champion이 재학습 없이 버팀) — 증거:
+  `reports/evidence/W6-02_drift_monitor.md`. **주의**: 이 결과대로면 W6-03/04의 "자동
+  반복 루프"를 자연 발생으로 시연할 수 없음 — 진행 방식 사용자 확인 필요(아래).
+- [~] W6-03 드리프트 데이터 60개 생성(train 40 / val 10 / golden_drift 10) → ETL → 새 `dataset_hash` — 루프 1차 시도의 입력
+  — **코드 완료, 실행 보류(2026-11-12 사용자 결정)**: `src/etchpipe/sim/drift_recipes.py`
+  (Sobol 분할, viennaps 비의존) + `scripts/run_drift_data_gen.py`(`etch-sim:0.1`, 시뮬레이션)
+  + `scripts/process_drift_data.py`(`etch-train:0.1`, `etl.process_dataset` 재사용 →
+  dataset_hash). 실제 60개 시뮬레이션(2~6시간 추정)은 W6-04 증거②와 함께 나중에 수동
+  트리거하기로 함 — W6-02에서 이 드리프트 강도(×1.15)로는 루프가 자연 트리거되지 않음을
+  확인했기 때문(`reports/evidence/W6-02_drift_monitor.md`).
+- [~] W6-04 **자동 반복 루프 구현(최대 4회, ADR-0002)**: 1차 champion에서 3~5에폭 미세조정 → 게이트. BLOCK이면 2차(드리프트 train 40→100개 자동 확장 재생성, ViennaPS 추가 호출) → 게이트. BLOCK이면 3차(에폭 10~15) → 4차(학습률 조정) 순서로 자동 진행. 어느 시도든 PASS면 즉시 승격하고 루프 종료, 4회 모두 BLOCK이면 champion 유지 + 알림. 시도마다 게이트 결과 기록
+  — **[CPU/매핑]** 루프 오케스트레이션 코드(시도 순서·게이트 호출·기록)는 CPU에서 구현 가능.
+  **[GPU 팀원]** 실제 미세조정(에폭 실행) 자체는 GPU에서 수행.
+  — **오케스트레이션 코드 완료(2026-11-12)**: `src/etchpipe/retrain/loop.py::run_retrain_loop`
+  (ADR-0002 에스컬레이션 표 그대로, `fine_tune_fn`/`gate_fn`/`regenerate_fn` 주입식 —
+  실제 미세조정은 GPU 팀원 엔트리포인트를 나중에 꽂음). `tests/unit/test_retrain_loop.py`
+  6종(1차 통과 즉시 종료/점진 에스컬레이션/4회 전부 BLOCK/2차에서만 regenerate 호출/
+  ADR-0002 설정값 일치/max_attempts). **실제 실행(실제 미세조정+게이트, 증거②)은
+  W6-03 데이터와 함께 나중에 수동 트리거** — 사용자 결정.
 - [ ] W6-05 `python -m etchpipe.retrain run` 단일 명령으로 전 과정(에스컬레이션 루프 포함) 무개입 실행, `reports/evidence/retrain_<ts>.json`에 `attempts: [{attempt, config, gate_result}, ...]` 기록
 - [ ] W6-06 **증거 ② 제출본**: 승격까지 완주한 실행 1회 이상(자동 반복 과정 포함) + 재학습 전/후 오차 표 + 시도별 로그. 4회 모두 BLOCK이면 그 자체를 결과로 기록(사람이 사후 원인 분석, 이번 루프의 무개입 완주 정의는 깨지 않음)
 - [ ] W6-07 `retrain-demo` 수동 워크플로(소규모 설정)
 
 ### ② 서빙 (다음)
-- [ ] W6-08 `/predict` 실모델 연결(champion 로드, CPU), 입력 검증, 범위 경고(`in_range`), 2배 초과 422, 키 인증, 요청 크기·속도 제한 → FR-12, FR-13
-- [ ] W6-09 오류 응답 정제(경로·스택 미노출), 이상 입력 100개 퍼징에서 5xx 없음
-- [ ] W6-10 `docker-compose.yml`, 로컬 직접 실행 문서화, 두 방식 모두 `/health` 확인, 지연 측정(조건 병기)
+- [x] W6-08 `/predict` 실모델 연결(champion 로드, CPU), 입력 검증, 범위 경고(`in_range`), ~~2배 초과 422~~, 키 인증, 요청 크기·속도 제한 → FR-12, FR-13
+  — **DOC-01(2026-11-12)**: "2배 초과 422"는 `project-definition.md` §4("범위 밖 입력
+  **경고**")·`project-design.md` §C7("유효 범위 밖은 **거부하지 않고** `in_range=false`로
+  경고만 한다")와 정면으로 어긋남 — 상위 문서 둘 다 거부를 명시적으로 금지. 우선순위
+  규칙(definition > design > checklist)에 따라 체크리스트 쪽을 따른다: 범위 밖이어도
+  거부하지 않고 `in_range=false`만 표시(사용자 결정).
+  — **완료(2026-11-12)**: `src/etchpipe/serve/inference.py`(champion 로드·t=0 메시
+  구성·롤아웃·cd/depth/taper) + `app.py` 재작성(입력 검증 Field(gt=0)·배치/시간 개수
+  상한·요청 크기 413·속도 제한 429). `requirements-serve.txt`에 physicsnemo·ViennaPS
+  등 대거 추가(환경 3분리에서 벗어남, 사용자 결정) — t=0 메시의 ViennaLS 레벨셋 메싱
+  결과를 순수 Python으로 재현 못 해서 ViennaPS가 서빙에도 필요했음. `scripts/
+  register_champion.py`로 `mgn_tuned`를 레지스트리 첫 champion으로 등록. 실제
+  end-to-end `/predict` 호출 성공(cd/depth/taper_deg 실측) — 증거:
+  `reports/evidence/W6-08_predict_real_model.md`. CI `serve-tests` job 신설.
+- [x] W6-09 오류 응답 정제(경로·스택 미노출), 이상 입력 100개 퍼징에서 5xx 없음
+  — **완료(2026-11-12)**: 퍼징으로 실제 버그 3종 발견·수정 — ① `mask_width`/
+  `mask_height` 극단값(1e9)에서 ViennaPS 메시 생성이 멈춤 → `le=25.0` 상한 추가,
+  ② `gt`/`le`만으로 NaN/Infinity를 못 걸러내 추론까지 흘러가 응답 직렬화에서 500 →
+  `allow_inf_nan=False` 추가, ③ FastAPI 기본 422 핸들러가 거부된 원본값을 echo해서
+  그 자체가 NaN/Infinity면 에러 응답도 500 → `RequestValidationError` 전용 핸들러로
+  원본값 제외. 부수 발견: `BaseHTTPMiddleware`가 예외 핸들러 호출을 막아 순수 ASGI
+  미들웨어로 교체. `scripts/fuzz_predict.py`로 100개 퍼징 — 5xx 0건. 증거:
+  `reports/evidence/W6-09_error_sanitization_fuzz.md`.
+- [x] W6-10 `docker-compose.yml`, 로컬 직접 실행 문서화, 두 방식 모두 `/health` 확인, 지연 측정(조건 병기)
+  — **완료(2026-11-12)**: `docker-compose.yml`(serve 1서비스, `etch-serve:0.1` 재사용,
+  `src`/`registry`/`runs/mgn_tuned` 읽기전용 마운트) + `docs/serving.md`(두 방식 실행
+  커맨드). compose·직접 실행(`docker run`) 둘 다 `/health` 200, `/model`·`/predict`
+  실제 동작 확인(API 키 검증 포함). `/predict` 지연 실측: 둘 다 안정화 후 ~19~20초
+  (CPU, 2스텝 롤아웃) — 증거: `reports/evidence/W6-10_docker_compose_local_run.md`.
 
 ### ③ 모델 B (마지막, 줄일 수 있음)
-- [ ] W6-11 FNO 구현(S6 결과 기반), CPU 학습(격자 128×256, 느리면 64×128), SDF 0등고선 복원 → FR-08
-- [ ] W6-12 모델 A/B 비교표(같은 test 분할·지표·조건)
-- [ ] W6-13 시간이 모자라면 모델 B를 "단일 조건 단순 비교"로 축소하고 비교표는 유지, 축소 내용을 문서에 기록
+- [x] W6-11 FNO 구현(S6 결과 기반), SDF 0등고선 복원 → FR-08 — **[CPU/매핑]** 모델 래퍼·입출력
+  매핑 코드(`src/etchpipe/models/fno.py`, MeshGraphNet 래퍼와 같은 패턴)는 CPU에서 작성.
+  **[GPU 팀원]** 실제 학습(원래 계획 "CPU 학습(격자 128×256)"에서 변경, GPU로 진행)·오차율 확인.
+  — **완료(2026-11-12)**: GPU 팀원이 전달한 `runs/fno_tuned/`(골든10 Chamfer 0.069µm,
+  합격)의 `inference.py`/`preprocess.py`를 재구현 없이 그대로 감싸는 `FNOModel` 작성
+  (`sdf_from_vtp`/`rollout_sdf`/`curve_from_sdf`/`predict_curve`). `curve_from_sdf`가
+  SDF 0등고선 복원(`skimage.measure.find_contours`). scikit-image 의존성 추가 발견·설치
+  (0.26.0, requirements-train.txt/Dockerfile.train/CI). 실제 체크포인트·실제 데이터로
+  테스트 3종 통과(README 문서화 값 33.22/33.05 재확인 포함) — 증거:
+  `reports/evidence/W6-11_fno_wrapper.md`.
+- [x] W6-12 모델 A/B 비교표(같은 test 분할·지표·조건)
+  — **완료(2026-11-12)**: `scripts/run_model_comparison.py`로 test 40개 전체, 같은
+  정답(outer_path 메시 폴리라인) 기준 Chamfer·깊이오차 비교. 결과: 모델 A(mgn_tuned,
+  epoch=2) Chamfer 0.408/깊이오차 1.540, 모델 B(fno_tuned) Chamfer 0.155/깊이오차
+  0.320 — B가 뚜렷하게 낫지만 A가 epoch=2뿐이라 학습 성숙도 차이로 해석. 증거:
+  `reports/evidence/W6-12_model_comparison.md`.
+- [x] W6-13 시간이 모자라면 모델 B를 "단일 조건 단순 비교"로 축소하고 비교표는 유지, 축소 내용을 문서에 기록
+  — **해당 없음(2026-11-12)**: W6-12를 test 40개 전체로 완주해서 축소가 필요 없었음.
 
 **게이트 G6**: 증거 ②가 존재하고, 서빙이 로컬·Compose 모두에서 동작한다.
 

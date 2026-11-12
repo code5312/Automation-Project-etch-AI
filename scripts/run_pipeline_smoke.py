@@ -47,8 +47,9 @@ def main() -> int:
     mean_chamfer = sum(errs) / len(errs)
     print(f"   zero-model vs t1 평균 Chamfer: {mean_chamfer:.4f} (스모크 참고치)")
 
-    print("4) 게이트: 더미 임계값으로 PASS 확인(최소판 — 항목 ①만)")
+    print("4) 게이트: PASS 경로 확인(②③④물리 입력 없이 전부 건너뛰어 기본 PASS)")
     # 스모크 목적: 모델 성능이 아니라 "게이트가 호출되고 PASS 경로가 동작하는지"만 본다.
+    # ADR-0004 이후 ①(golden chamfer)은 참고 지표로만 쓰여 더 이상 차단 조건이 아니다.
     gate_result = run_gate(model, golden_pairs, max_chamfer=mean_chamfer + 1e-6)
     print("   gate:", gate_result)
     if gate_result.exit_code != 0:
@@ -66,9 +67,24 @@ def main() -> int:
     import os
 
     os.environ.setdefault("ETCH_API_KEY", "smoke-test-key")
-    from etchpipe.serve.app import app
+    import etchpipe.serve.app as serve_app
 
-    client = TestClient(app)
+    # W6-08 이후 app.py가 실제 champion(torch/physicsnemo/viennaps 필요)에 연결돼서,
+    # 이 더미 전용 스모크 테스트가 실제 추론까지 타면 가벼운 CI 환경(requirements-dev.txt
+    # 만 설치)에서 깨진다(2026-11-13, 실제 GH Actions에서 발견: ModuleNotFoundError
+    # shapely). load_champion/predict_recipe를 더미로 바꿔서 HTTP 배선만 확인한다 —
+    # tests/unit/test_serve.py가 쓰는 것과 같은 모킹 패턴.
+    serve_app.load_champion = lambda: {
+        "model_id": "dummy-smoke-v1",
+        "card": {"valid_range": {}, "gate_result": {"passed": True, "exit_code": 0, "reasons": []}},
+    }
+    serve_app.predict_recipe = lambda theta_dict, times: {
+        "model_version": "dummy-smoke-v1",
+        "profiles": [{"t": t, "points": [[0.0, 0.0]]} for t in times],
+        "cd": 0.0, "depth": 0.0, "taper_deg": 0.0, "in_range": True, "clamped": False,
+    }
+
+    client = TestClient(serve_app.app)
     key = os.environ["ETCH_API_KEY"]
     assert client.get("/health").status_code == 200
     assert client.get("/model", headers={"x-api-key": key}).status_code == 200
