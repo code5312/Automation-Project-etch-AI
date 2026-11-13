@@ -416,19 +416,39 @@ def validate_run(run_dir: str | pathlib.Path) -> dict:
     - 스냅샷 개수 == actual_k+1(meta.json, 조기종료면 K보다 작을 수 있음)
     - 점 수>0, 점·법선에 NaN/Inf 없음(`np.isfinite`)
     - 식각 깊이가 시간에 따라 감소하지 않음(물리 타당성, 설계서 §9)
-    - 점 수 최대치(그래프 크기 예산, 설계서 §4.2 위험)도 함께 보고"""
+    - 점 수 최대치(그래프 크기 예산, 설계서 §4.2 위험)도 함께 보고
+
+    **W7-03 실패 시나리오로 발견·수정**(2026-11-14): `meta.json`이 없거나(시뮬레이션이
+    중간에 죽어 파일이 아예 안 쓰인 경우) 스냅샷 `.vtp`가 손상된 경우(예: 쓰기 도중
+    끊김) 전부 이 함수의 "예외 안 던짐" 약속을 어기고 그대로 크래시했다(`meta.json`
+    없으면 `FileNotFoundError`, 손상된 `.vtp`는 `load_snapshot` 내부에서
+    `KeyError: 'MaterialIds'` 등 VTK 파싱 실패가 그대로 전파) — `validate_dataset`로
+    여러 run을 배치 검증할 때 run 1개의 손상이 전체 배치를 중단시켰다. 둘 다 잡아서
+    errors에 담는다."""
     run = pathlib.Path(run_dir)
-    meta = json.load(open(run / "meta.json"))
-    expected = meta["actual_k"] + 1
+    errors: list[str] = []
+    try:
+        meta = json.loads((run / "meta.json").read_text())
+        expected = meta["actual_k"] + 1
+    except (OSError, json.JSONDecodeError, KeyError) as e:
+        return {
+            "run_id": run.name,
+            "errors": [f"meta.json unreadable: {type(e).__name__}: {e}"],
+            "n_snapshots": 0,
+            "max_n_points": 0,
+        }
     snaps = sorted((run / "snapshots").glob("t*.vtp"))
-    errors = []
     if len(snaps) != expected:
         errors.append(f"snapshot_count={len(snaps)} expected={expected}(actual_k+1)")
 
     depths = []
     max_n_points = 0
     for s in snaps:
-        p, _lines, _mid, nv = load_snapshot(s)
+        try:
+            p, _lines, _mid, nv = load_snapshot(s)
+        except Exception as e:  # noqa: BLE001 - 손상된 VTK 파일이 무엇을 던질지 보장 없음
+            errors.append(f"{s.name}: unreadable snapshot: {type(e).__name__}: {e}")
+            continue
         if len(p) == 0:
             errors.append(f"{s.name}: n_points=0")
         if not (np.isfinite(p).all() and np.isfinite(nv).all()):

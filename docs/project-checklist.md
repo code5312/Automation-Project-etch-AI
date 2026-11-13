@@ -496,7 +496,15 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   컴포넌트 표, 디렉터리 구조, CI job 표)이 1~2주차 수준에서 멈춰 있어 C3~C9 실제
   구현 상태를 전혀 반영 못 하고 있었음 — README 전면 재작성(`/github-readme-maker`
   형식)으로 해결. 증거: `reports/evidence/W7-02_clean_env_reproduction.md`.
-- [ ] W7-03 실패 시나리오 테스트: 시뮬레이션 실패, 데이터 손상, 모델 로드 실패, 게이트 오탐/미탐
+- [x] W7-03 실패 시나리오 테스트: 시뮬레이션 실패, 데이터 손상, 모델 로드 실패, 게이트 오탐/미탐
+  — **완료(2026-11-14)**: 모델 로드 실패(레지스트리 레이어 직접 테스트 4건, 기존
+  로직 양호). 데이터 손상(`etl.validate_run`이 자체 docstring 약속과 다르게
+  `meta.json` 없음/손상된 `.vtp`에서 크래시하던 버그 2건 발견·수정). 시뮬레이션
+  실패(`run_sim`은 의도적으로 예외를 안 삼킴 확인, 실패 시 디스크 상태를 실제
+  ViennaPS로 검증 — `etch-sim:0.1`). 게이트 오탐(실제 사례 1건 확인: golden-10
+  소표본에서 정상 모델 80% BLOCK, W5-06 재검증과 동일 건)/미탐(W5-06에서 기검증).
+  검증: 로컬 129 passed, `etch-train:0.1` 전체 215 passed, `etch-sim:0.1` 2 passed
+  — 전부 회귀 없음. 증거: `reports/evidence/W7-03_failure_scenarios.md`.
 - [ ] W7-04 보안: 의존성 취약점 스캔, 시크릿 스캔, `torch.load` `weights_only` 적용 확인, 커밋 이력에 데이터·키 없음 확인
 - [ ] W7-05 전체 테스트·커버리지 실행, 깨진 테스트 0
 - [ ] W7-06 금지 표현 검사 통과(코드·README·대시보드·모델 카드), 정의서 6장 기준 → FR-18

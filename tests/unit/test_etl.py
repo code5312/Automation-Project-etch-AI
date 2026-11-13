@@ -448,6 +448,45 @@ def test_validate_run_detects_nan_points(tmp_path: Path) -> None:
     assert any("NaN" in e for e in r["errors"]), r
 
 
+def test_validate_run_handles_missing_meta_json_without_crashing(tmp_path: Path) -> None:
+    # W7-03 실패 시나리오: 시뮬레이션이 중간에 죽어 meta.json이 아예 안 쓰인 경우.
+    run = tmp_path / "no_meta"
+    (run / "snapshots").mkdir(parents=True)
+
+    r = validate_run(run)  # 전에는 FileNotFoundError가 그대로 전파됐음
+    assert any("meta.json" in e for e in r["errors"]), r
+    assert r["n_snapshots"] == 0
+
+
+def test_validate_dataset_one_bad_run_does_not_abort_the_batch(tmp_path: Path) -> None:
+    # validate_run 자체 docstring의 약속("한 건이 전체를 중단시키지 않도록") 확인.
+    (tmp_path / "bad_no_meta" / "snapshots").mkdir(parents=True)
+    good = tmp_path / "good"
+    good.mkdir()
+    json.dump({"actual_k": 0, "params": {}}, open(good / "meta.json", "w"))
+    p = np.array([[0.0, 0.0], [1.0, 0.0]], dtype=np.float32)
+    lines = np.array([[0, 1]])
+    mat = np.array([10])
+    nv = np.array([[0.0, 1.0]])
+    _write_fake_vtp(good / "snapshots" / "t000.vtp", p, lines, mat, nv)
+
+    report = validate_dataset(tmp_path, ["bad_no_meta", "good"])
+    assert report["n_runs"] == 2
+    assert report["n_bad"] == 1
+    assert {r["run_id"] for r in report["bad_runs"]} == {"bad_no_meta"}
+
+
+def test_validate_run_handles_corrupted_vtp_without_crashing(tmp_path: Path) -> None:
+    # W7-03 실패 시나리오: 쓰기 도중 끊긴(또는 손상된) .vtp 파일.
+    run = tmp_path / "corrupt_vtp"
+    (run / "snapshots").mkdir(parents=True)
+    json.dump({"actual_k": 0, "params": {}}, open(run / "meta.json", "w"))
+    (run / "snapshots" / "t000.vtp").write_bytes(b"not a valid vtp file, truncated garbage")
+
+    r = validate_run(run)  # 전에는 KeyError('MaterialIds')가 그대로 전파됐음
+    assert any("unreadable snapshot" in e for e in r["errors"]), r
+
+
 def test_validate_run_detects_non_monotonic_depth(tmp_path: Path) -> None:
     run = tmp_path / "bad_depth"
     run.mkdir(parents=True)
