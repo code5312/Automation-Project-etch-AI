@@ -25,6 +25,16 @@ from etchpipe.train.run_train import git_sha, package_versions, set_seed
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_STEPS = (5, 10, 20)
 
+# W7-04(보안): 체크포인트 로드를 `weights_only=True`로 바꾼다(기본 `False`는 임의 코드
+# 실행이 가능한 일반 pickle — 악성 .pt가 섞여 들어오면 위험). 체크포인트에 든 mu_n/sd_n/
+# mu_e/sd_e가 (구버전 포맷에서는) numpy 배열이라 기본 allowlist만으로는 못 읽어서
+# [확인, 2026-11-14 실측: `runs/mgn_tuned/model.pt`로 직접 재현] 필요한 numpy 타입만
+# 명시적으로 허용한다 — `weights_only=False`로 되돌리는 것보다 안전하다(그 경로로 들어올
+# 수 있는 임의 객체를 이 4개로 좁힘).
+torch.serialization.add_safe_globals(
+    [np._core.multiarray._reconstruct, np.ndarray, np.dtype, np.dtypes.Float32DType]
+)
+
 
 def norm_from_checkpoint(ckpt: dict) -> NodeEdgeNorm | None:
     """체크포인트에 내장된 정규화 통계(`mu_n/sd_n/mu_e/sd_e`)가 있으면 그걸로 `NodeEdgeNorm`을
@@ -58,7 +68,7 @@ def load_model_a(
     CLI)는 토이 모델로 테스트 가능하게 한다(train_main.py의 `build_model`과 같은 이유)."""
     from etchpipe.models.meshgraphnet import MeshGraphNetModel
 
-    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
     sd = ckpt["state_dict"]
     if any(k.startswith("net.") for k in sd):
         sd = {k.removeprefix("net."): v for k, v in sd.items()}

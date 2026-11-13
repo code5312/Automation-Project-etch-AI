@@ -24,5 +24,9 @@ RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 
 # 테스트 실행용(requirements-dev.txt와 버전 동일 — CI와 다른 버전으로 "통과"하는 걸 막음).
 RUN pip install --no-cache-dir ruff==0.17.3 pytest==9.1.1 httpx==0.28.1
 
+# W7-04(보안, 2026-11-14): Dockerfile.train과 동일 — base 이미지의 pip 24.0/setuptools
+# 79.0.1에 실제 CVE 있음(pip-audit 실측). 맨 뒤에 둬서 위 캐시를 안 깸.
+RUN pip install --no-cache-dir --upgrade pip setuptools
+
 WORKDIR /app
 ENV PYTHONPATH=/app/src

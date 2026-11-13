@@ -505,7 +505,16 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   소표본에서 정상 모델 80% BLOCK, W5-06 재검증과 동일 건)/미탐(W5-06에서 기검증).
   검증: 로컬 129 passed, `etch-train:0.1` 전체 215 passed, `etch-sim:0.1` 2 passed
   — 전부 회귀 없음. 증거: `reports/evidence/W7-03_failure_scenarios.md`.
-- [ ] W7-04 보안: 의존성 취약점 스캔, 시크릿 스캔, `torch.load` `weights_only` 적용 확인, 커밋 이력에 데이터·키 없음 확인
+- [x] W7-04 보안: 의존성 취약점 스캔, 시크릿 스캔, `torch.load` `weights_only` 적용 확인, 커밋 이력에 데이터·키 없음 확인
+  — **완료(2026-11-14)**: `pip-audit`로 `etch-train:0.1`/`etch-serve:0.1`에서 실제
+  CVE 15건(pip 24.0, setuptools 79.0.1, base 이미지 유래) 발견 — Dockerfile에 업그레이드
+  레이어 추가 후 재빌드·재스캔해 해소(회귀 없음, 215/34 passed). `detect-secrets`
+  신규 4건은 전부 `params_hash` 오탐으로 확인·audit 처리. **`torch.load` 보안 버그
+  발견·수정**: `eval.py::load_model_a`(서빙이 실제 champion 로드에 쓰는 함수)와
+  `run_rollout_comparison.py`가 `weights_only=False`였음 — `weights_only=True` +
+  필요한 numpy 타입만 명시 허용(`add_safe_globals`)으로 변경, 실제 체크포인트 2종으로
+  로드 성공 확인. 커밋 이력(85개) 전수 확인: `data/`·키 파일 커밋 이력 0건. 증거:
+  `reports/evidence/W7-04_security_review.md`.
 - [ ] W7-05 전체 테스트·커버리지 실행, 깨진 테스트 0
 - [ ] W7-06 금지 표현 검사 통과(코드·README·대시보드·모델 카드), 정의서 6장 기준 → FR-18
 - [ ] W7-07 전체 파이프라인 단계별 실행 시간 측정, 병목 1개 개선
