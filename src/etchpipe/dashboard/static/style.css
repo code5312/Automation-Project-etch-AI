@@ -72,9 +72,14 @@ legend { padding: 0 8px 0 0; font-size: 12px; font-weight: 700; }
 .add-time-row input { width: 100px; }
 .primary { margin-top: 13px; border: 1px solid #164d9f; width: 100%; min-height: 39px; border-radius: 5px; font-size: 13px; font-weight: 700; color: #fff; background: var(--accent); }
 .primary:hover { background: #123f87; }
+.prediction-feedback.message { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 8px 0 0; }
+#prediction-elapsed { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .run-context { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .plot-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; margin: 11px 16px 0; }
-#chart { width: 100%; height: clamp(300px, 27vw, 368px); }
+.chart-slot { position: relative; }
+.profile-chart { width: 100%; height: clamp(300px, 27vw, 368px); }
+.chart-staging { position: absolute; inset: 0 auto auto 0; visibility: hidden; }
+.chart-first-render { visibility: hidden; }
 .plot-caption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; padding: 8px 16px 6px; border-top: 1px solid var(--soft); }
 .plot-key { display: flex; flex-wrap: wrap; gap: 7px 15px; margin: 0; padding: 0; list-style: none; }
 .plot-key li { display: flex; align-items: center; gap: 6px; color: #35465b; font-size: 12px; line-height: 1.4; }
@@ -131,7 +136,7 @@ legend { padding: 0 8px 0 0; font-size: 12px; font-weight: 700; }
   .page-title { padding-block: 13px 12px; }
   h1 { font-size: 24px; }
   .panel-header { min-height: 49px; padding-block: 8px; }
-  #chart { height: 260px; }
+  .profile-chart { height: 260px; }
   .fields { gap: 6px; }
 }
 @media (max-width: 920px) {
@@ -146,5 +151,5 @@ legend { padding: 0 8px 0 0; font-size: 12px; font-weight: 700; }
   .page-title { padding-block: 18px 14px; }
   h1 { font-size: 24px; }
   .field { grid-template-columns: minmax(0, 1fr) minmax(110px, 48%); }
-  #chart { height: 285px; }
+  .profile-chart { height: 285px; }
 }
