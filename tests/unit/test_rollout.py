@@ -273,6 +273,55 @@ def test_rollout_val_error_by_step_with_physics_check_counts_zero_for_unmoved_su
     assert result[1]["self_intersections"] == 0
 
 
+def test_rollout_val_error_by_step_without_shape_check_omits_iou_hd95(
+    tmp_path: pathlib.Path,
+) -> None:
+    graphs_root = tmp_path / "graphs"
+    etl_run(FIXTURES / "r0000", graphs_root / "r0000", THETA_KEYS)
+
+    model = RecordingZeroModel()
+    result = rollout_val_error_by_step(model, graphs_root, "r0000", steps=[1], step_min=1.0)
+    assert "iou" not in result[1]
+    assert "hd95" not in result[1]
+
+
+def test_rollout_val_error_by_step_with_shape_check_reports_iou_and_hd95(
+    tmp_path: pathlib.Path,
+) -> None:
+    # ADR-0005 결정4 배선: 변위 0 모델이면 예측 표면이 t=0 그대로라 진짜 식각된 true
+    # 표면과는 다르다 — IoU는 [0,1] 범위 안, HD95는 0 이상이면 충분히 계산됐다는 뜻.
+    graphs_root = tmp_path / "graphs"
+    etl_run(FIXTURES / "r0000", graphs_root / "r0000", THETA_KEYS)
+
+    model = RecordingZeroModel()
+    result = rollout_val_error_by_step(
+        model, graphs_root, "r0000", steps=[1], step_min=1.0, check_shape=True
+    )
+    assert 0.0 <= result[1]["iou"] <= 1.0
+    assert result[1]["hd95"] >= 0.0
+
+
+def test_rollout_val_error_by_step_shape_check_identical_surface_gives_iou_one(
+    tmp_path: pathlib.Path,
+) -> None:
+    # 변위 0 모델을 "실제 정답"이 t=0과 동일한 인공 레시피에 돌리면(1스텝 전혀 안 팜)
+    # IoU는 1.0(완전 일치), HD95는 0이어야 한다 — 제대로 같은 격자에서 비교된다는 증거.
+    import shutil
+
+    raw = tmp_path / "raw_static"
+    shutil.copytree(FIXTURES / "r0000", raw)
+    shutil.copy(raw / "snapshots" / "t000.vtp", raw / "snapshots" / "t001.vtp")
+    graphs_root = tmp_path / "graphs"
+    etl_run(raw, graphs_root / "r0000", THETA_KEYS)
+
+    model = RecordingZeroModel()
+    result = rollout_val_error_by_step(
+        model, graphs_root, "r0000", steps=[1], step_min=1.0, check_shape=True
+    )
+    assert result[1]["iou"] == 1.0
+    assert result[1]["hd95"] < 1e-6
+
+
 def test_rollout_val_error_by_step_reports_depth_pred_true_raw_values(
     tmp_path: pathlib.Path,
 ) -> None:

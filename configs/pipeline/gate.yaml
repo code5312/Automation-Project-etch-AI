@@ -3,24 +3,37 @@
 # ADR-0004(2026-11-11)로 어떤 규칙이 실제로 PASS/BLOCK을 가르는지 재구성됨 — 아래 값은
 # `src/etchpipe/gate/gate.py::run_gate`의 같은 이름 인자로 그대로 넘기면 된다. 실제로
 # 이 파일을 읽는 호출부: `scripts/run_gate_negative.py`(W5-06/W5-08, 2026-11-12).
+#
+# ADR-0005(2026-11-13, 1단계)로 `max_chamfer`·`rollout_max_ratio` 값이 갱신됐고,
+# 2단계(레시피별 통과율+윌콕슨 검정, 드리프트 트리거 경로만)에서 쓸 키를 미리 선언해
+# 뒀다 — `cd_floor`/`recipe_pass_rate`/`rollout_min_increase`/`alpha_retrain`은 아직
+# `gate.py`가 읽지 않는다(2단계 구현 전까지 비활성 상수).
 gate:
   # ① 골든 Chamfer 상한 — ADR-0004 이후 참고 지표만(passed에 영향 없음, reference_metrics
-  # 에만 기록). 그래도 모니터링용으로 "첫 정상 모델" 기준 산출: mgn_tuned(ep2, 설계서
-  # §3 C5 "GPU 팀원 최종 후보") val 40개 중앙값 Chamfer 0.388µm(ADR-0004 새 정의,
-  # reports/eval/mgn_tuned_val40_guarded/metrics.json) × 1.5 [확인, 체크리스트 W5-04
-  # 공식 그대로].
-  max_chamfer: 0.582
+  # 에만 기록). ADR-0005 결정6: 산출 방법론을 "첫 정상 모델 기준값×1.5"에서 "정답 격자
+  # 간격(grid_delta)"으로 변경 — 더 이상 특정 모델 실측값에 의존하지 않는다[문서 §5].
+  max_chamfer: 0.3
 
   # ② 깊이·CD 치수 오차 — 차단(설계서 "≤5%"). grid=0.3은 configs/sim/base.yaml의
-  # sim.grid_delta와 동일(골든 채점 노트북 GRID 상수와도 일치) [확인].
+  # sim.grid_delta와 동일(골든 채점 노트북 GRID 상수와도 일치) [확인]. 2단계에서 깊이
+  # 오차 하한으로 계속 쓰인다(CD 오차 하한은 아래 cd_floor로 분리).
   grid: 0.3
   max_dim_pct: 5.0
 
-  # ③ 직전 챔피언 대비 평균 오차 악화 — ADR-0004 이후 참고 지표만(차단 안 함).
+  # ③ 직전 챔피언 대비 평균 오차 악화 — ADR-0004 이후 참고 지표만(차단 안 함). 2단계에서
+  # 윌콕슨 검정(ADR-0005 결정4, 관문 C①)으로 대체될 예정 — 그때 이 키를 제거한다.
   max_regression: 0.10
 
-  # ④ 롤아웃 후반/전반 Chamfer 비율 — 차단(골든 채점 노트북 LATE_EARLY_MAX와 동일 값).
-  rollout_max_ratio: 2.0
+  # ④ 롤아웃 후반/전반 Chamfer 비율 — 차단. ADR-0005 결정3: 2.0 -> 2.5(val 40 실측
+  # 선형 증가 최솟값 2.5, 기존 2.0은 정상 선형 증가 모델을 오탐 차단할 수 있었음[문서
+  # §5 "데이터 확인"]). 집계 축(레시피 묶음 평균 -> 레시피별 판정) 전환은 2단계.
+  rollout_max_ratio: 2.5
 
   # ⑤ 추론 시간 상한 — 경고만(차단 안 함). 아직 실측 latency 분포가 없어 비워 둔다.
   max_latency_s: null  # [미확인: W5-01 measure_latency로 실측 후 채움]
+
+  # --- 아래는 ADR-0005 2단계(드리프트 트리거 경로, A+C만) 전용 — 아직 gate.py가 안 읽음 ---
+  cd_floor: 0.6             # 중간 CD 오차 하한(grid=0.3과 분리, 문서 §5 "0.6µm" 근거)
+  rollout_min_increase: 0.3 # 롤아웃 오차 증가량 하한(비율 OR 조건)
+  recipe_pass_rate: 0.9     # 레시피별 3조건 통과율 합격선
+  alpha_retrain: 0.0125     # 드리프트 루프 윌콕슨 검정 유의수준(본페로니 보정, 0.05/4회)

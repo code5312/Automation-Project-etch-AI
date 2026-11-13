@@ -12,8 +12,11 @@ from etchpipe.gate.gate import (
     check_champion_regression,
     check_dimension_error,
     check_latency,
+    check_no_regression,
+    check_recipe_pass_rate,
     check_rollout_late_step,
     check_rollout_late_step_multi,
+    check_rollout_recipe,
     run_gate,
     write_gate_result,
 )
@@ -139,6 +142,147 @@ def test_check_cd_depth_error_fails_if_either_side_fails() -> None:
         depth_pred=[10.0], depth_true=[10.0], cd_pred=[25.0], cd_true=[20.0], grid=0.3, max_pct=5.0
     )
     assert ok is False
+
+
+def test_check_rollout_recipe_passes_within_ratio() -> None:
+    ok, ratio, _increase = check_rollout_recipe(
+        [1.0, 1.0, 1.1, 1.2], max_ratio=2.5, min_increase=0.3
+    )
+    assert ok is True
+    assert ratio < 2.5
+
+
+def test_check_rollout_recipe_ratio_over_but_increase_within_passes() -> None:
+    # 비율은 넘지만(3.0 > 2.5) 증가량(0.2)이 하한(0.3) 이내 — OR 조건이라 통과해야 함
+    ok, ratio, increase = check_rollout_recipe(
+        [0.1, 0.1, 0.3, 0.3], max_ratio=2.5, min_increase=0.3
+    )
+    assert abs(ratio - 3.0) < 1e-9
+    assert abs(increase - 0.2) < 1e-9
+    assert ok is True
+
+
+def test_check_rollout_recipe_both_conditions_fail() -> None:
+    ok, ratio, increase = check_rollout_recipe(
+        [1.0, 1.0, 5.0, 5.0], max_ratio=2.5, min_increase=0.3
+    )
+    assert ratio == 5.0
+    assert increase == 4.0
+    assert ok is False
+
+
+def test_check_rollout_recipe_near_zero_early_is_auto_pass() -> None:
+    ok, ratio, _increase = check_rollout_recipe(
+        [1e-9, 1e-9, 1.0, 1.0], max_ratio=2.5, min_increase=0.3
+    )
+    assert ok is True
+    assert ratio == 1.0
+
+
+def _passing_recipe(n_steps: int = 4) -> list[float]:
+    return [1.0] * (n_steps // 2) + [1.1] * (n_steps - n_steps // 2)
+
+
+def test_check_recipe_pass_rate_all_recipes_pass() -> None:
+    n = 10
+    ok, detail = check_recipe_pass_rate(
+        depth_pred=[10.1] * n, depth_true=[10.0] * n,
+        cd_pred=[20.1] * n, cd_true=[20.0] * n,
+        rollout_step_errors_by_recipe=[_passing_recipe() for _ in range(n)],
+    )
+    assert ok is True
+    assert detail["n_passed"] == n
+    assert detail["pass_rate"] == 1.0
+
+
+def test_check_recipe_pass_rate_below_90_percent_fails() -> None:
+    # 10개 중 2개(20%)가 깊이 오차로 탈락 -> 통과율 80% < 90%
+    n = 10
+    depth_pred = [10.1] * 8 + [15.0, 15.0]  # 마지막 2개는 깊이 오차 50%
+    ok, detail = check_recipe_pass_rate(
+        depth_pred=depth_pred, depth_true=[10.0] * n,
+        cd_pred=[20.1] * n, cd_true=[20.0] * n,
+        rollout_step_errors_by_recipe=[_passing_recipe() for _ in range(n)],
+    )
+    assert ok is False
+    assert detail["n_passed"] == 8
+    assert abs(detail["pass_rate"] - 0.8) < 1e-9
+
+
+def test_check_recipe_pass_rate_exactly_90_percent_passes() -> None:
+    # Clopper-Pearson 하한 근거(문서 §5): 36/40(90%) 이상이면 합격
+    n = 40
+    depth_pred = [10.1] * 36 + [15.0] * 4
+    ok, detail = check_recipe_pass_rate(
+        depth_pred=depth_pred, depth_true=[10.0] * n,
+        cd_pred=[20.1] * n, cd_true=[20.0] * n,
+        rollout_step_errors_by_recipe=[_passing_recipe() for _ in range(n)],
+    )
+    assert ok is True
+    assert detail["n_passed"] == 36
+
+
+def test_check_recipe_pass_rate_calc_failure_counts_as_all_conditions_failed() -> None:
+    n = 10
+    depth_pred = [10.1] * 9 + [float("nan")]  # 마지막 1개는 계산 실패(NaN)
+    ok, detail = check_recipe_pass_rate(
+        depth_pred=depth_pred, depth_true=[10.0] * n,
+        cd_pred=[20.1] * n, cd_true=[20.0] * n,
+        rollout_step_errors_by_recipe=[_passing_recipe() for _ in range(n)],
+    )
+    assert detail["n_passed"] == 9  # NaN 레시피는 통과 집계에서 빠짐(분모엔 포함)
+    assert detail["n"] == 10
+    assert detail["per_recipe"][-1]["calc_failed"] is True
+    assert detail["per_recipe"][-1]["depth_ok"] is False
+    assert detail["per_recipe"][-1]["cd_ok"] is False
+    assert detail["per_recipe"][-1]["rollout_ok"] is False
+
+
+def test_check_no_regression_passes_when_candidate_matches_champion() -> None:
+    iou = [0.9, 0.91, 0.92, 0.89, 0.9, 0.93, 0.88, 0.9]
+    hd95_vals = [0.2, 0.25, 0.3, 0.22, 0.18, 0.2, 0.21, 0.19]
+    ok, detail = check_no_regression(iou, iou, hd95_vals, hd95_vals)
+    assert ok is True
+    assert detail["iou_not_regressed"] is True
+    assert detail["hd95_ok"] is True
+
+
+def test_check_no_regression_blocks_on_significantly_worse_iou() -> None:
+    # 후보가 모든 레시피에서 일관되게 더 나쁨(윌콕슨이 유의하다고 판단할 만큼)
+    champion_iou = [0.95, 0.94, 0.96, 0.93, 0.95, 0.97, 0.94, 0.96, 0.95, 0.93]
+    candidate_iou = [0.80, 0.79, 0.81, 0.78, 0.80, 0.82, 0.79, 0.81, 0.80, 0.78]
+    hd95_vals = [0.2] * 10
+    ok, detail = check_no_regression(candidate_iou, champion_iou, hd95_vals, hd95_vals, alpha=0.05)
+    assert ok is False
+    assert detail["iou_not_regressed"] is False
+    assert detail["iou_wilcoxon_p"] < 0.05
+
+
+def test_check_no_regression_blocks_on_worst_hd95_degradation() -> None:
+    iou = [0.9] * 5
+    champion_hd95 = [0.2, 0.2, 0.2, 0.2, 0.2]
+    candidate_hd95 = [0.2, 0.2, 0.2, 0.2, 0.7]  # 레시피 1개가 0.5µm 악화(>0.3 하한)
+    ok, detail = check_no_regression(iou, iou, candidate_hd95, champion_hd95)
+    assert ok is False
+    assert detail["hd95_ok"] is False
+    assert abs(detail["worst_hd95_degradation"] - 0.5) < 1e-9
+
+
+def test_check_no_regression_includes_val_pass_rate_when_given() -> None:
+    iou = [0.9] * 5
+    hd95_vals = [0.2] * 5
+    val_fail = (False, {"n": 40, "n_passed": 30, "pass_rate": 0.75})
+    ok, detail = check_no_regression(iou, iou, hd95_vals, hd95_vals, val_pass_rate_result=val_fail)
+    assert ok is False
+    assert detail["val_pass_rate_ok"] is False
+
+
+def test_check_no_regression_skips_val_pass_rate_when_not_given() -> None:
+    iou = [0.9] * 5
+    hd95_vals = [0.2] * 5
+    ok, detail = check_no_regression(iou, iou, hd95_vals, hd95_vals, val_pass_rate_result=None)
+    assert ok is True
+    assert detail["val_pass_rate_ok"] is True
 
 
 def test_check_champion_regression_true_when_no_champion() -> None:

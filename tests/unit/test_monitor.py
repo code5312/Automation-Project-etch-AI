@@ -40,25 +40,31 @@ def test_mean_chamfer_over_recipes_reports_mean_and_per_recipe(
     assert result["mean"] >= 0.0
 
 
-def test_check_drift_triggers_when_mean_chamfer_exceeds_tiny_threshold(
+def test_check_drift_triggers_when_pass_rate_below_threshold(
     tmp_path: pathlib.Path,
 ) -> None:
+    # ADR-0005 결정5: ZeroModel(항상 0 변위, 전혀 안 움직임)이 실제 식각된 정답과
+    # 비교되면 깊이 오차가 당연히 임계치를 넘어 3조건을 다 통과 못 할 것 — 통과율이
+    # pass_rate(기본 90%)보다 훨씬 낮은 0%로 나와야 트리거.
     graphs_root = _build_graphs(tmp_path)
     result = check_drift(
-        ZeroModel(), None, champion_golden_chamfer=1e-6,
+        ZeroModel(), None,
         monitor_graphs_root=graphs_root, monitor_raw_dir=FIXTURES, monitor_run_ids=RUN_IDS,
     )
     assert result["triggered"] is True
-    assert result["drift_threshold"] == 1.5e-6
-    assert result["mean_chamfer"] > result["drift_threshold"]
+    assert result["n"] == len(RUN_IDS)
+    assert result["pass_rate"] < result["required_pass_rate"]
 
 
-def test_check_drift_does_not_trigger_when_threshold_is_huge(
+def test_check_drift_does_not_trigger_when_pass_rate_requirement_is_zero(
     tmp_path: pathlib.Path,
 ) -> None:
+    # pass_rate=0.0이면 무조건 통과(0% 이상은 항상 참) — 임계치 자체를 느슨하게 바꾸면
+    # 트리거가 안 걸리는 것도 확인(회귀 방지용 경계 테스트).
     graphs_root = _build_graphs(tmp_path)
     result = check_drift(
-        ZeroModel(), None, champion_golden_chamfer=1e6,
+        ZeroModel(), None,
         monitor_graphs_root=graphs_root, monitor_raw_dir=FIXTURES, monitor_run_ids=RUN_IDS,
+        pass_rate=0.0,
     )
     assert result["triggered"] is False
