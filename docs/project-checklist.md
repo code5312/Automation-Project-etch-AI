@@ -477,7 +477,15 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
 
 ## 7주차: 대시보드, 통합, 점검
 
-- [ ] W7-01 대시보드 화면 3개(레시피 입력→예측, 예측 vs 정답·모델 비교, 지표·게이트 이력), Plotly.js 파일 포함, API만 호출 → FR-14
+- [x] W7-01 대시보드 화면 3개(레시피 입력→예측, 예측 vs 정답·모델 비교, 지표·게이트 이력), Plotly.js 파일 포함, API만 호출 → FR-14
+  — **완료(2026-11-14)**: 화면①(레시피 입력→예측)은 `src/etchpipe/dashboard/static/
+  app.js`+`predict.js`가 `/api/predict`(공개 프록시, 서빙 API) 실제 호출로 연결
+  (`useDemo=false`). 화면②(모델 비교)는 `compare.js`가 `/api/models/compare` 호출,
+  화면③(게이트 이력)은 `history.js`가 `/api/gate/history` 호출 — 셋 다 탭 전환
+  (`views.js`)으로 한 페이지에서 오간다. 백엔드(`src/etchpipe/serve/app.py`)에
+  세 공개 엔드포인트 신설, `StaticFiles`로 대시보드 정적 파일도 같은 포트에서 서빙.
+  PR #4~#7(backend-security·frontend) 머지로 `main`에 전부 반영, CI 전부 SUCCESS.
+  Plotly.js는 `vendor/plotly-4.1.1.min.js`로 기존에 포함.
 - [ ] W7-02 **클린 환경 재현**: 새 clone + 새 컨테이너에서 README만 따라 스모크 파이프라인 실행, 막힌 곳 전부 기록·수정 → FR-17
 - [ ] W7-03 실패 시나리오 테스트: 시뮬레이션 실패, 데이터 손상, 모델 로드 실패, 게이트 오탐/미탐
 - [ ] W7-04 보안: 의존성 취약점 스캔, 시크릿 스캔, `torch.load` `weights_only` 적용 확인, 커밋 이력에 데이터·키 없음 확인
