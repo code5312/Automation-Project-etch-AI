@@ -49,17 +49,72 @@ def _distance_to_curve(points: np.ndarray, curve: np.ndarray, chunk: int = 2048)
     return out
 
 
-def chamfer_distance(pred: np.ndarray, true: np.ndarray, densify_step: float = 0.05) -> float:
+def _restrict_to_silicon(points: np.ndarray) -> np.ndarray:
+    """y≤0(실리콘 영역)인 점만 남긴다 [제안, ADR-0005 결정1]. 마스크(y>0)는 식각 중
+    거의 변하지 않아서(문서 실측: 높이 손실 최대 0.013µm, 400건 전부 마스크 유지)
+    포함시키면 거리 지표가 "거의 안 변하는 부분"에 묻혀 왜곡된다(문서 실측: 마스크
+    포함 표면 Dice 0.59 vs 제외 0.01). 점이 하나도 안 남으면(모두 y>0) 빈 배열을
+    반환 — 호출부가 처리한다.
+
+    **비교 대상(상대 곡선)은 restrict하지 않고 그대로 둔다** [제안] — 쿼리 점만
+    실리콘 영역으로 제한하고, 투영 대상 선분은 전체를 유지해야 y=0 경계 바로 아래
+    점이 "끊긴 선분" 때문에 거리가 왜곡되는 걸 피한다."""
+    return points[points[:, 1] <= 0]
+
+
+def chamfer_distance(
+    pred: np.ndarray, true: np.ndarray, densify_step: float = 0.05, silicon_only: bool = False
+) -> float:
     """두 윤곽선 사이의 양방향 평균 점-선분 거리 [확인, ADR-0004 결정1 — 골든셋 공식
     채점 노트북(`golden10_채점_(입력용).ipynb`) `chamfer()`와 동일 정의로 교체, 2026-11-11].
     각 곡선을 `densify_step`(기본 0.05µm) 간격으로 촘촘히 재샘플링한 뒤 상대 곡선의
     선분까지 거리를 재서 양방향 평균(÷2)한다. 두 곡선의 원래 점 밀도가 달라도(예: MGN
     메시 vs ViennaPS 스냅샷) 왜곡되지 않는다. **주의**: `train/chamfer_loss.py`(학습
     손실)는 역전파·속도 때문에 의도적으로 점-점 방식을 그대로 쓴다 — 이 함수와 더 이상
-    같은 정의가 아니다."""
-    d_pred_to_true = _distance_to_curve(_densify_curve(pred, densify_step), true)
-    d_true_to_pred = _distance_to_curve(_densify_curve(true, densify_step), pred)
+    같은 정의가 아니다.
+
+    `silicon_only=True`면 ADR-0005 결정1대로 y≤0만 비교한다 — **기본값은 False**(기존
+    호출부인 `monitor.py` 드리프트 판정·`gate.py` ④ 롤아웃 검사의 기존 수치를 이번
+    1단계에서 바꾸지 않기 위함)[제안, 2026-11-14]. 새 평가 전용 경로(표면 Dice·HD95,
+    ADR-0005 2단계 게이트)에서만 명시적으로 True를 쓴다."""
+    pred_d, true_d = _densify_curve(pred, densify_step), _densify_curve(true, densify_step)
+    if silicon_only:
+        pred_d, true_d = _restrict_to_silicon(pred_d), _restrict_to_silicon(true_d)
+    d_pred_to_true = _distance_to_curve(pred_d, true)
+    d_true_to_pred = _distance_to_curve(true_d, pred)
     return 0.5 * float(d_pred_to_true.mean() + d_true_to_pred.mean())
+
+
+def surface_dice(
+    pred: np.ndarray, true: np.ndarray, tau: float = 0.3, densify_step: float = 0.05
+) -> float:
+    """표면 Dice [제안, ADR-0005 결정1, 문서 §2.1 — Nikolov 외 2021]. 두 윤곽선을
+    `densify_step`(0.05µm) 간격으로 조밀화한 뒤, 상대 곡선에서 `tau`(기본 0.3µm) 이내인
+    점의 비율을 양방향으로 합산한다(분자: 두 방향에서 tau 이내인 점 개수 합, 분모: 두
+    곡선의 전체 점 개수 합). y≤0(실리콘 영역)만 비교한다 — `_restrict_to_silicon` 참고.
+    양쪽 다 점이 하나도 안 남으면(완전히 마스크만 있는 경우, 사실상 안 생길 케이스) 1.0."""
+    pred_d = _restrict_to_silicon(_densify_curve(pred, densify_step))
+    true_d = _restrict_to_silicon(_densify_curve(true, densify_step))
+    if len(pred_d) == 0 and len(true_d) == 0:
+        return 1.0
+    if len(pred_d) == 0 or len(true_d) == 0:
+        return 0.0
+    hit_pred = (_distance_to_curve(pred_d, true) <= tau).sum()
+    hit_true = (_distance_to_curve(true_d, pred) <= tau).sum()
+    return float(hit_pred + hit_true) / float(len(pred_d) + len(true_d))
+
+
+def hd95(pred: np.ndarray, true: np.ndarray, densify_step: float = 0.05) -> float:
+    """HD95(95백분위 하우스도르프 거리) [제안, ADR-0005 결정1, 문서 §2.1 — Huttenlocher
+    외 1993, Taha & Hanbury 2015 95백분위 관례]. 양방향 거리 각각의 95번째 백분위 중
+    큰 값. Chamfer(평균)가 가리는 국소 큰 오차를 잡는다. y≤0(실리콘 영역)만 비교한다."""
+    pred_d = _restrict_to_silicon(_densify_curve(pred, densify_step))
+    true_d = _restrict_to_silicon(_densify_curve(true, densify_step))
+    if len(pred_d) == 0 or len(true_d) == 0:
+        return 0.0
+    p95_pred = float(np.percentile(_distance_to_curve(pred_d, true), 95))
+    p95_true = float(np.percentile(_distance_to_curve(true_d, pred), 95))
+    return max(p95_pred, p95_true)
 
 
 def depth(points: np.ndarray) -> float:
@@ -90,14 +145,18 @@ def mask_from_points(
     return mask_from_sdf(sdf)
 
 
-def iou(mask_pred: np.ndarray, mask_true: np.ndarray) -> float:
-    """식각된(vacuum) 영역 기준 IoU [제안] — 변하는 건 트렌치 모양(vacuum)이지 solid
-    바탈이 아니라서 vacuum으로 계산한다. 둘 다 vacuum이 없으면(완전 solid) 1.0으로 본다."""
-    vac_pred, vac_true = ~mask_pred, ~mask_true
-    union = np.logical_or(vac_pred, vac_true).sum()
+def iou(mask_pred: np.ndarray, mask_true: np.ndarray, mask_initial: np.ndarray) -> float:
+    """처음 고체였다가 식각된 칸 기준 IoU [제안, ADR-0005 결정2 — 기존 정의(전체 vacuum
+    영역)를 대체]. `mask_initial`은 t=0(식각 시작 전) 마스크(solid=True) — 웨이퍼 위
+    공기 영역처럼 애초에 항상 vacuum인 칸은 예측·정답에서 항상 일치해 IoU를 부풀리므로
+    뺀다. `mask_pred`/`mask_true`도 `mask_initial`과 같은 격자(xr/yr/nx/ny)여야 한다.
+    둘 다 "처음 고체였다가 식각된 칸"이 없으면(식각 전혀 안 됨) 1.0으로 본다."""
+    etched_pred = (~mask_pred) & mask_initial
+    etched_true = (~mask_true) & mask_initial
+    union = np.logical_or(etched_pred, etched_true).sum()
     if union == 0:
         return 1.0
-    inter = np.logical_and(vac_pred, vac_true).sum()
+    inter = np.logical_and(etched_pred, etched_true).sum()
     return float(inter) / float(union)
 
 
@@ -130,29 +189,59 @@ def cd_profile(
     xr: tuple[float, float],
     yr: tuple[float, float],
     depth_value: float,
+    top_frac: float = 0.1,
+    mid_frac: float = 0.5,
     bottom_frac: float = 0.9,
 ) -> dict[str, float]:
-    """top(y=0, Si 표면)/mid/bot(바닥) CD [제안]. bot은 바닥 끝점(폭이 0으로 수렴)이 아니라
-    `bottom_frac`(기본 90%) 지점에서 재서 끝점 불안정성을 피한다."""
-    y_bot = -depth_value * bottom_frac
+    """top/mid/bot CD — 깊이의 10%/50%/90% 높이에서 측정 [제안, ADR-0005 결정2, 문서
+    §2.2 — 기존(y=0, 45%, 90%)을 대체]. y=0(마스크 구멍 폭)은 더 이상 top이 아니다 —
+    0%·100% 끝단은 값이 불안정해(문서 §5 "10·50·90% CD 측정 높이" 근거) 10%에서 잰다."""
     return {
-        "top": cd_at_y(mask, xr, yr, 0.0),
-        "mid": cd_at_y(mask, xr, yr, y_bot / 2.0),
-        "bot": cd_at_y(mask, xr, yr, y_bot),
+        "top": cd_at_y(mask, xr, yr, -depth_value * top_frac),
+        "mid": cd_at_y(mask, xr, yr, -depth_value * mid_frac),
+        "bot": cd_at_y(mask, xr, yr, -depth_value * bottom_frac),
     }
 
 
 def taper_angle_deg(cd_top: float, cd_bot: float, depth_value: float) -> float:
     """측벽이 수직(0도)에서 기울어진 각도. top→bot 선형 프로파일 가정
-    tan(theta) = (cd_top - cd_bot) / 2 / depth [제안, 정의서 7.2 "테이퍼 각도"의 구체 구현]."""
+    tan(theta) = (cd_top - cd_bot) / 2 / (0.8 × depth) [제안, ADR-0005 결정2, 문서
+    §2.2 — 분모를 `depth_value`에서 `0.8 × depth_value`로 변경]. `cd_profile`의 top/bot이
+    각각 깊이 10%/90% 지점(80% 구간)에서 측정되므로, 그 구간의 실제 수직 거리인
+    0.8×depth로 분모를 맞춘다(기존엔 `cd_profile`이 y=0을 top으로 썼던 구버전 기준의
+    분모가 그대로 남아 있었음)."""
     if depth_value <= 0:
         return 0.0
-    return float(np.degrees(np.arctan((cd_top - cd_bot) / 2.0 / depth_value)))
+    return float(np.degrees(np.arctan((cd_top - cd_bot) / 2.0 / (0.8 * depth_value))))
 
 
-def bowing(cd_top: float, cd_mid: float, cd_bot: float) -> float:
-    """중간 CD가 top/bot 선형 평균보다 얼마나 넓은지(양수=바깥으로 볼록) [제안]."""
-    return float(cd_mid - (cd_top + cd_bot) / 2.0)
+def bowing(
+    mask: np.ndarray,
+    xr: tuple[float, float],
+    yr: tuple[float, float],
+    depth_value: float,
+    low_frac: float = 0.05,
+    high_frac: float = 0.95,
+    n_samples: int = 19,
+) -> float:
+    """5~95% 높이 구간의 최대 CD − 5% 높이 CD(양수=바깥으로 볼록) [제안, ADR-0005 결정2,
+    문서 §2.2 — 기존 `중간CD − (위+바닥)/2`(3점 비교)를 대체]. 최대 폭 위치가 항상
+    중간(50%)은 아니라서, `low_frac`~`high_frac`(기본 5~95%, 5%p 간격 19개 지점)을
+    직접 스캔해 최댓값을 찾는다. **시그니처가 바뀌었다** — 기존엔 미리 구한 CD 3개
+    (top/mid/bot)를 받았지만, 이제 여러 높이를 새로 재야 해서 `mask`/`xr`/`yr`/
+    `depth_value`를 직접 받는다(호출부 없음 확인, 2026-11-14 — 영향 없음)."""
+    fracs = np.linspace(low_frac, high_frac, n_samples)
+    cds = np.array([cd_at_y(mask, xr, yr, -depth_value * f) for f in fracs])
+    return float(cds.max() - cds[0])
+
+
+def speed_ratio(sim_time_s: float, model_time_s: float) -> float:
+    """추론 속도 비 = ViennaPS 레시피당 시간 ÷ 모델 시간 [제안, ADR-0005 결정2-1, 문서
+    §2.3]. 합격선 없음 — 보고용. 클수록 모델이 더 빠르다. `model_time_s`가 0 이하면
+    (측정 실패 등) `inf`를 돌려 호출부가 "측정 불가"로 구분할 수 있게 한다."""
+    if model_time_s <= 0:
+        return float("inf")
+    return float(sim_time_s / model_time_s)
 
 
 def self_intersection_count(curve: np.ndarray, min_loop: float = 0.3) -> int:
