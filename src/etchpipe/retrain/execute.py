@@ -33,22 +33,44 @@ EVAL_STEPS = (5, 10)
 
 class DriftState:
     """드리프트 데이터(train/val/golden_drift)를 들고 다니며, `expand_train`(2차 시도)이
-    train을 늘리면 다시 ETL해 `dataset_hash`/`graphs_root`를 갱신한다."""
+    train을 늘리면 다시 ETL해 `dataset_hash`/`graphs_root`를 갱신한다.
 
-    def __init__(self) -> None:
+    모든 인자의 기본값은 W6-03/04 실제 운영 경로(train 40/val 10/golden_drift 10,
+    `data/drift/`)와 동일 — `DriftState()`(무인자)는 그대로 전과 같이 동작한다[확인,
+    2026-11-13 리팩터링]. `raw_dir`/`processed_root`/크기/시드/접두사를 바꾸면 W6-07
+    `retrain-demo`처럼 작은 별도 드리프트셋으로도 같은 로직을 재사용할 수 있다."""
+
+    def __init__(
+        self,
+        raw_dir: pathlib.Path = DRIFT_RAW_DIR,
+        processed_root: pathlib.Path = DRIFT_PROCESSED_ROOT,
+        n_train: int = 40,
+        n_val: int = 10,
+        n_golden_drift: int = 10,
+        seed: int = 9100,
+        prefix: str = "drift",
+        substrate_a_ie: float = SUBSTRATE_A_IE,
+        sim_config_id: str = "live_v1",
+        expand_seed: int = 9200,
+        expand_prefix: str = "driftx",
+    ) -> None:
         from etchpipe.sim.drift_recipes import drift_splits
 
-        self.splits, self.params_by_id = drift_splits()
+        self.raw_dir = raw_dir
+        self.processed_root = processed_root
+        self.substrate_a_ie = substrate_a_ie
+        self.sim_config_id = sim_config_id
+        self.expand_seed = expand_seed
+        self.expand_prefix = expand_prefix
+        self.splits, self.params_by_id = drift_splits(n_train, n_val, n_golden_drift, seed, prefix)
         self._process()
 
     def _process(self) -> None:
         from etchpipe.etl.etl import THETA_KEYS, process_dataset
 
-        manifest = process_dataset(
-            DRIFT_RAW_DIR, self.splits, DRIFT_PROCESSED_ROOT, THETA_KEYS
-        )
+        manifest = process_dataset(self.raw_dir, self.splits, self.processed_root, THETA_KEYS)
         self.dataset_hash = manifest["dataset_hash"]
-        self.graphs_root = DRIFT_PROCESSED_ROOT / self.dataset_hash / "graphs"
+        self.graphs_root = self.processed_root / self.dataset_hash / "graphs"
 
     def eval_ids(self) -> list[str]:
         return sorted(set(self.splits["golden_drift"]) | set(self.splits["val"]))
@@ -62,19 +84,22 @@ class DriftState:
         n_more = n_target - len(self.splits["train"])
         if n_more <= 0:
             return 0
-        extra = make_recipes(n_more, seed=9200, prefix="driftx")
+        extra = make_recipes(n_more, seed=self.expand_seed, prefix=self.expand_prefix)
         for r in extra:
             rid = r["run_id"]
-            out = DRIFT_RAW_DIR / rid
+            out = self.raw_dir / rid
             if not (out / "meta.json").exists():
-                run_sim(r["params"], out, substrate_a_ie=SUBSTRATE_A_IE, sim_config_id="live_v1")
+                run_sim(
+                    r["params"], out,
+                    substrate_a_ie=self.substrate_a_ie, sim_config_id=self.sim_config_id,
+                )
             self.params_by_id[rid] = r["params"]
             self.splits["train"].append(rid)
         self._process()
         return n_more
 
 
-def make_fine_tune_fn(state: DriftState, fallback_norm):
+def make_fine_tune_fn(state: DriftState, fallback_norm, out_root: pathlib.Path = RETRAIN_RUNS_ROOT):
     def fine_tune_fn(champion_ckpt: pathlib.Path, cfg: dict) -> pathlib.Path:
         from etchpipe.eval.eval import load_model_a
         from etchpipe.train.loop import train_one_epoch
@@ -85,7 +110,7 @@ def make_fine_tune_fn(state: DriftState, fallback_norm):
         optimizer = torch.optim.Adam(model.parameters(), lr=BASE_LR * cfg["lr_mult"])
         epochs = cfg["epochs"][0]  # 하한(모듈 docstring 참고)
 
-        out_dir = RETRAIN_RUNS_ROOT / f"attempt{cfg['attempt']}_{int(time.time())}"
+        out_dir = out_root / f"attempt{cfg['attempt']}_{int(time.time())}"
         out_dir.mkdir(parents=True, exist_ok=True)
         history = []
         for epoch in range(epochs):
@@ -124,7 +149,7 @@ def make_gate_fn(state: DriftState):
 
         depth_pred, depth_true, chamfer_by_step, self_x_total = [], [], [], 0
         for rid in state.eval_ids():
-            meta = json.loads((DRIFT_RAW_DIR / rid / "meta.json").read_text())
+            meta = json.loads((state.raw_dir / rid / "meta.json").read_text())
             actual_k = meta["actual_k"]
             steps = sorted({s for s in EVAL_STEPS if s <= actual_k} | {actual_k})
             result = rollout_val_error_by_step(

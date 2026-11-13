@@ -181,7 +181,7 @@ node_block이 번갈아 쌓임)라 레이어 12개는 **`processor_size=6`**이 
   **업데이트(2026-11-11)**: 팀원이 실제로 이 테스트를 수행했음을 확인(사용자 전달,
   2026-11-11) [확인, 보고값 — 수치 로그는 이 repo에 없음]. 골든10 Chamfer 0.090µm(합격
   판정)도 "학습이 된다"는 결과로 일치. **통과 처리.**
-- [ ] W4-04 본 학습(모델 `processor_size=6, hidden=64` — GPU 팀원 초안 체크포인트와
+- [x] W4-04 본 학습(모델 `processor_size=6, hidden=64` — GPU 팀원 초안 체크포인트와
   `load_state_dict`로 검증[확인], 한 번 12로 잘못 바꿨다가 정정함, 2026-11-09), 에폭당
   시간 기록, 예산 3시간 이내 [제안] — **[CPU/매핑] 배선 완료(2026-11-10)**:
   `src/etchpipe/train/train_main.py`(`run_training`, `build_model`, CLI)로 config→모델→
@@ -393,7 +393,20 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   독립적으로 재평가해 작성(`gate.py`의 `reference_metrics`는 ②(깊이/CD)가 통과하면
   수치를 안 남기는 설계라 별도 스크립트로 복원) — 수치는 `reports/evidence/
   W6-06_retrain_before_after.json` 참고.
-- [ ] W6-07 `retrain-demo` 수동 워크플로(소규모 설정)
+- [x] W6-07 `retrain-demo` 수동 워크플로(소규모 설정)
+  — **완료(2026-11-13)**: `scripts/run_retrain_demo.py`(신규) + `.github/workflows/
+  retrain-demo.yml`(신규, `workflow_dispatch`). 실제 champion(`runs/mgn_tuned/model.pt`)·
+  실제 ViennaPS 시뮬레이션·같은 ADR-0002 루프(`retrain/execute.py`,`retrain/loop.py`)를
+  소규모(train 2/val 1/golden_drift 1)로 로컬 docker에서 실행 완주(`dataset_hash=
+  2db835337bb1`) — 4회 모두 depth/CD 임계치 초과로 BLOCK, `promoted: false`(데이터가
+  적어 정상적인 결과, 실제 운영 W6-06의 60개 레시피 PASS와 대비됨). `build/retrain_demo/
+  result.json`에 시도별 로그 기록 확인. 실행 중 발견한 버그 3건 수정: ①초기 레시피
+  시뮬레이션 누락, ②`gate_fn`이 `DRIFT_RAW_DIR` 상수 대신 `state.raw_dir`을 써야 함,
+  ③2차 시도 `regenerate_fn`이 실제 운영 절대값(100)을 그대로 받아 데모 train을 98개
+  추가 폭주 생성하던 버그(`_make_scaled_regenerate_fn`으로 실제 ×2.5 비율만 적용해 수정,
+  [제안] 태그). 실행 후 production `registry/current`가 `mgn_retrain_20261112T212130`로
+  그대로 유지됨을 직접 확인(데모가 registry에 전혀 쓰지 않음). GH Actions 워크플로 자체의
+  실제 트리거 실행은 [미확인](로컬 docker로 스크립트 로직만 검증).
 
 ### ② 서빙 (다음)
 - [x] W6-08 `/predict` 실모델 연결(champion 로드, CPU), 입력 검증, 범위 경고(`in_range`), ~~2배 초과 422~~, 키 인증, 요청 크기·속도 제한 → FR-12, FR-13

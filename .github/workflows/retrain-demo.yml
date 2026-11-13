@@ -1,0 +1,48 @@
+name: retrain-demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      n_train:
+        description: "드리프트 train 레시피 수"
+        default: "2"
+      n_val:
+        description: "드리프트 val 레시피 수"
+        default: "1"
+      n_golden_drift:
+        description: "드리프트 golden_drift 레시피 수"
+        default: "1"
+
+jobs:
+  retrain-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # W6-07(2026-11-13): C8 재학습 시나리오 전체(드리프트 생성→ETL→미세조정→게이트→
+      # (필요시 재생성))를 소규모로 시연. serve-tests job과 같은 조합이 필요하다 —
+      # 미세조정·게이트는 train 스택(torch/physicsnemo), 드리프트 데이터 생성과 2차
+      # 시도 재생성은 ViennaPS.
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6 build-essential
+      - run: pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
+      - run: pip install nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1
+      - run: pip install --no-build-isolation torch_scatter==2.1.2
+      - run: pip install ViennaPS==4.5.0 ViennaLS==5.8.5
+      - run: pip install pyvista==0.49.1 shapely==2.2.0 scipy==1.17.1 PyYAML==6.0.3 numpy==2.4.6
+      - run: pip install -r requirements-dev.txt
+      - run: pip install -e .
+      - env:
+          N_TRAIN: ${{ inputs.n_train }}
+          N_VAL: ${{ inputs.n_val }}
+          N_GOLDEN_DRIFT: ${{ inputs.n_golden_drift }}
+        run: python scripts/run_retrain_demo.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retrain-demo-result
+          path: build/retrain_demo/result.json
