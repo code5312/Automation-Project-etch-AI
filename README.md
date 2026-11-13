@@ -101,7 +101,7 @@ gate-negative 통과: 10개 케이스 모두 기대대로 동작
 | train | `requirements-train.txt`, `docker/Dockerfile.train` | ETL, 학습, 평가, 게이트, 재학습 (Python 3.11, CPU) | 컨테이너 전용 |
 | serve | `requirements-serve.txt`, `docker/Dockerfile.serve` | 서빙 + 대시보드 (torch+physicsnemo+ViennaPS CPU, FastAPI) | 컨테이너 전용 |
 
-`docker-compose.yml`은 `serve` 이미지를 빌드해 `registry/`·`runs/mgn_tuned/`를 읽기 전용으로 마운트하고 `8000` 포트로 띄웁니다(`ETCH_API_KEY` 환경변수 필요). 자세한 로컬 실행 방법은 [`docs/serving.md`](docs/serving.md)를 참고하세요.
+`docker-compose.yml`은 `serve` 이미지를 빌드해 `registry/`·`runs/mgn_tuned/`·`runs/retrain/`·`reports/eval/`을 읽기 전용으로 마운트하고 `8000` 포트로 띄웁니다(`ETCH_API_KEY` 환경변수 필요). 필요한 파일과 검증 순서는 [`docs/serving.md`](docs/serving.md)를 참고하세요.
 
 > Linux에서 `import viennaps`나 VTK 계열 import가 `libX11.so.6` 같은 오류로 실패하면 아래 패키지가 필요합니다(CI와 `Dockerfile.sim`/`Dockerfile.serve`가 같은 목록을 설치합니다).
 > `apt-get install -y --no-install-recommends libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6`
