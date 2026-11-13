@@ -43,7 +43,9 @@ jobs:
       - run: pip install -e .
       # test_serve.py는 fastapi 등 서빙 전용 의존성이 필요(아래 serve-tests job) —
       # train 환경에는 안 설치하므로 여기선 뺀다(기존 관례 그대로, 2026-11-12 재확인).
-      - run: pytest tests/unit -v --ignore=tests/unit/test_serve.py
+      # test_run_sim.py(W7-03 신규)는 viennaps가 필요(etch-sim:0.1 전용) — 이 job엔
+      # 설치하지 않으므로 뺀다. serve-tests job에 viennaps가 있어 거기서 돈다(2026-11-14).
+      - run: pytest tests/unit -v --ignore=tests/unit/test_serve.py --ignore=tests/unit/test_run_sim.py
 
   serve-tests:
     runs-on: ubuntu-latest
@@ -56,6 +58,8 @@ jobs:
       # 전체(torch+physicsnemo+ViennaPS까지)가 필요하다 — docker/Dockerfile.serve와 동일
       # 설치 순서. 다만 test_serve.py 자체는 load_champion/predict_recipe를 모킹해서
       # 레지스트리·실제 체크포인트 없이도 통과한다(HTTP 레이어만 검증).
+      # test_run_sim.py(W7-03 신규)도 이 job에 viennaps가 있어 여기서 같이 돈다
+      # (unit-tests job엔 viennaps가 없어 거기선 --ignore, 2026-11-14).
       - run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
@@ -70,7 +74,7 @@ jobs:
       - run: pip install -e .
       - env:
           ETCH_API_KEY: test-key-not-for-production
-        run: pytest tests/unit/test_serve.py -v
+        run: pytest tests/unit/test_serve.py tests/unit/test_run_sim.py -v
 
   viennaps-smoke:
     runs-on: ubuntu-latest
