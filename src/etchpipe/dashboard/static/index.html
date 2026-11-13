@@ -10,6 +10,9 @@
   <script defer src="predict.js"></script>
   <script defer src="r0007-reference.js"></script>
   <script defer src="app.js"></script>
+  <script defer src="compare.js"></script>
+  <script defer src="history.js"></script>
+  <script defer src="views.js"></script>
 </head>
 <body>
   <header class="masthead">
@@ -19,6 +22,12 @@
     </div>
   </header>
   <main class="wrap">
+    <nav class="view-nav" aria-label="대시보드 화면 전환">
+      <button type="button" data-view-button="predict" aria-pressed="true">레시피 예측</button>
+      <button type="button" data-view-button="compare" aria-pressed="false">모델 비교</button>
+      <button type="button" data-view-button="history" aria-pressed="false">게이트 이력</button>
+    </nav>
+    <section data-view-section="predict">
     <div class="page-title">
       <h1>식각 단면 분석</h1>
       <p>레시피를 실행하고 시간별 단면과 ViennaPS 기준을 비교합니다.</p>
@@ -125,6 +134,63 @@
         </div>
       </div>
     </div>
+    </section>
+
+    <section data-view-section="compare" hidden>
+      <div class="page-title">
+        <h1>모델 비교</h1>
+        <p>같은 test 분할·같은 지표(Chamfer/깊이오차)로 모델 A(MeshGraphNet)와 모델 B(FNO)를 비교합니다.</p>
+      </div>
+      <p id="compare-status" class="message" role="status" hidden></p>
+      <div id="compare-result" hidden>
+        <section class="panel" aria-labelledby="compare-chart-title">
+          <div class="panel-header">
+            <h2 id="compare-chart-title">낮을수록 좋음</h2>
+            <ul class="plot-key" aria-label="모델 범례">
+              <li><span class="swatch model-a" aria-hidden="true"></span>모델 A · MeshGraphNet</li>
+              <li><span class="swatch model-b" aria-hidden="true"></span>모델 B · FNO</li>
+            </ul>
+          </div>
+          <div class="compare-charts">
+            <div id="compare-chamfer-chart" role="img" aria-label="모델별 평균 Chamfer 거리 막대 그래프"></div>
+            <div id="compare-depth-chart" role="img" aria-label="모델별 평균 깊이오차 막대 그래프"></div>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="compare-table-title">
+          <div class="panel-header">
+            <h2 id="compare-table-title">비교표</h2>
+            <span id="compare-n" class="context-label"></span>
+          </div>
+          <div class="panel-body">
+            <table class="data-table compare-table">
+              <thead><tr><th scope="col">모델</th><th scope="col">Chamfer 평균</th><th scope="col">깊이오차 평균</th></tr></thead>
+              <tbody id="compare-rows"></tbody>
+            </table>
+            <p class="help">같은 test 레시피·같은 정답(outer_path) 기준. 조건은 설계서 §C4, 증거는 <code>reports/evidence/W6-12_model_comparison.md</code> 참고.</p>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section data-view-section="history" hidden>
+      <div class="page-title">
+        <h1>게이트 이력</h1>
+        <p>재학습 시도의 승격·거부 이력입니다(레지스트리 <code>history.jsonl</code>).</p>
+      </div>
+      <p id="history-status" class="message" role="status" hidden></p>
+      <section class="panel" id="history-result" hidden aria-labelledby="history-table-title">
+        <div class="panel-header">
+          <h2 id="history-table-title">이력</h2>
+          <span id="history-count" class="context-label"></span>
+        </div>
+        <div class="panel-body">
+          <table class="data-table history-table">
+            <thead><tr><th scope="col">시각</th><th scope="col">모델</th><th scope="col">동작</th><th scope="col">결과</th><th scope="col">이유</th></tr></thead>
+            <tbody id="history-rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
   </main>
 </body>
 </html>
