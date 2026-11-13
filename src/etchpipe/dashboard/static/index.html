@@ -62,6 +62,10 @@
             <p class="field-error" id="time-error" hidden></p>
           </fieldset>
           <button type="submit" id="submit" class="primary">단면 예측</button>
+          <div id="prediction-feedback" class="prediction-feedback">
+            <p id="prediction-message" role="status"></p>
+            <span id="prediction-elapsed" role="timer" hidden></span>
+          </div>
         </form>
       </section>
 
@@ -80,7 +84,9 @@
               <div class="choices" id="profiles" role="group" aria-label="표시할 단면 시간"></div>
               <button type="button" id="overlay-times" class="secondary overlay" aria-pressed="false">두 시간 겹치기</button>
             </div>
-            <div id="chart" role="img"></div>
+            <div class="chart-slot">
+              <div id="chart" class="profile-chart" role="img"></div>
+            </div>
             <div class="plot-caption">
               <ul id="plot-key" class="plot-key" aria-label="단면 출처"></ul>
               <label class="reference-toggle"><input type="checkbox" id="show-reference" checked> ViennaPS 기준 표시</label>
