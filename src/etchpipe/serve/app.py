@@ -17,16 +17,20 @@ route 안에서 직접 잡아 422로 바꾸고(1차 방어, "이상 입력 퍼�
 """
 
 import hmac
+import json
 import logging
 import math
 import os
+import pathlib
 import time
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
+from etchpipe.registry.registry import Registry
 from etchpipe.serve.inference import ChampionUnavailable, load_champion, predict_recipe
 
 logger = logging.getLogger("etchpipe.serve")
@@ -36,6 +40,11 @@ MAX_BATCH_RECIPES = 20  # [제안] 한 요청의 레시피 배치 크기 상한
 MAX_TIMES = 20  # [제안] 레시피당 요청 시간 개수 상한
 MAX_BODY_BYTES = 1_000_000  # [제안] 1MB — 요청 크기 제한
 RATE_LIMIT_PER_MINUTE = 60  # [제안] API 키당 분당 요청 수 상한(단일 프로세스 기준)
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+DASHBOARD_STATIC_DIR = REPO_ROOT / "src" / "etchpipe" / "dashboard" / "static"
+MODEL_COMPARISON_PATH = REPO_ROOT / "reports" / "eval" / "W6-12_model_comparison.json"
+REGISTRY_ROOT = REPO_ROOT / "registry"
 
 
 def _require_api_key_env() -> str:
@@ -221,8 +230,7 @@ def model_info(_: None = Depends(check_api_key)) -> dict:
     }
 
 
-@app.post("/predict", response_model=PredictResponse)
-def predict(req: PredictRequest, _: None = Depends(check_api_key)) -> PredictResponse:
+def _run_predict(req: PredictRequest) -> PredictResponse:
     try:
         raw_results = [predict_recipe(recipe.model_dump(), req.times) for recipe in req.recipes]
     except ChampionUnavailable as e:
@@ -241,3 +249,45 @@ def predict(req: PredictRequest, _: None = Depends(check_api_key)) -> PredictRes
         for r in raw_results
     ]
     return PredictResponse(model_version=model_version, results=results)
+
+
+@app.post("/predict", response_model=PredictResponse)
+def predict(req: PredictRequest, _: None = Depends(check_api_key)) -> PredictResponse:
+    return _run_predict(req)
+
+
+@app.post("/api/predict", response_model=PredictResponse)
+def api_predict(req: PredictRequest) -> PredictResponse:
+    """W7-01 대시보드용 공개 엔드포인트 — 같은 출처라 브라우저는 API 키를 몰라도 된다.
+    서버 프로세스 안에서 `/predict`와 같은 로직(`_run_predict`)을 그대로 호출할 뿐,
+    키를 "대신 붙여서 전달"하는 별도 HTTP 홉은 없다(같은 프로세스라 불필요) — 외부에
+    노출할 때 브라우저 쪽 JS에 `ETCH_API_KEY`가 그대로 보이는 걸 막는 게 목적이라,
+    전달 경로가 몇 홉인지는 중요하지 않다[확인]. 요청 크기·속도 제한(`_RateLimitMiddleware`)
+    은 이 경로에도 그대로 적용된다(클라이언트 IP 기준, 60/분)."""
+    return _run_predict(req)
+
+
+@app.get("/api/models/compare")
+def api_models_compare() -> dict:
+    """W7-01 대시보드 화면 ②(모델 비교표) — `scripts/run_model_comparison.py`(W6-12)가
+    만든 `reports/eval/W6-12_model_comparison.json`을 그대로 공개. 사전 계산된 정적
+    결과라 요청마다 재계산하지 않는다[확인]."""
+    if not MODEL_COMPARISON_PATH.exists():
+        raise HTTPException(status_code=503, detail="모델 비교 결과가 아직 없습니다")
+    return json.loads(MODEL_COMPARISON_PATH.read_text())
+
+
+@app.get("/api/gate/history")
+def api_gate_history() -> dict:
+    """W7-01 대시보드 화면 ③(게이트 이력) — `Registry.history()`(승격/거부 이력)를
+    그대로 공개. `registry/registry.py`가 이미 테스트로 검증한 파싱 로직을 그대로
+    재사용한다(직접 `history.jsonl`을 다시 파싱하지 않음, [확인])."""
+    return {"entries": Registry(REGISTRY_ROOT).history()}
+
+
+# W7-01: 대시보드 정적 파일을 같은 FastAPI 앱·같은 포트에서 서빙 — 별도 서버·CORS 설정
+# 없이 "같은 출처의 /api/predict" 전제(dashboard/README.md)를 그대로 만족시킨다. 명시적
+# 라우트(health/model/predict/api/*)를 전부 등록한 뒤 마지막에 마운트해야 경로가 겹치지
+# 않는다[확인] — StaticFiles(html=True)는 "/"를 index.html로, 못 찾는 경로는 404로 돌린다.
+if DASHBOARD_STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(DASHBOARD_STATIC_DIR), html=True), name="dashboard")

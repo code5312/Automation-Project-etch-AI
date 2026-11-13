@@ -3,6 +3,7 @@
 모킹해 HTTP 레이어(인증·검증·레이트리밋·바디크기)만 검사한다(이 둘은 서빙 전용
 컨테이너(`etch-serve:0.1`)에서만 실제로 동작, train 컨테이너에는 없음)."""
 
+import json
 import os
 
 from fastapi.testclient import TestClient
@@ -284,3 +285,67 @@ def test_rate_limit_middleware_tracks_separate_keys_independently() -> None:
     assert tc.get("/x", headers={"x-api-key": "key-a"}).status_code == 200
     assert tc.get("/x", headers={"x-api-key": "key-b"}).status_code == 200
     assert tc.get("/x", headers={"x-api-key": "key-a"}).status_code == 429
+
+
+# W7-01: 대시보드용 공개 엔드포인트(`/api/predict`, `/api/models/compare`,
+# `/api/gate/history`) — 브라우저가 API 키 없이 쓰는 경로라 `/predict`와 달리
+# 헤더 없이 호출돼야 한다.
+
+
+def test_api_predict_without_api_key_returns_matching_shape(monkeypatch) -> None:
+    monkeypatch.setattr("etchpipe.serve.app.predict_recipe", _fake_predict_recipe)
+    resp = client.post("/api/predict", json={"recipes": [_RECIPE], "times": [0.5]})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["model_version"] == "fake-champion"
+    assert len(body["results"]) == 1
+
+
+def test_api_predict_missing_field_is_422() -> None:
+    bad_recipe = dict(_RECIPE)
+    del bad_recipe["ion_flux"]
+    resp = client.post("/api/predict", json={"recipes": [bad_recipe], "times": [0.5]})
+    assert resp.status_code == 422
+
+
+def test_api_models_compare_returns_file_contents(monkeypatch, tmp_path) -> None:
+    payload = {"summary": {"n": 1, "A_chamfer_mean": 0.1}, "rows": []}
+    path = tmp_path / "compare.json"
+    path.write_text(json.dumps(payload))
+    monkeypatch.setattr("etchpipe.serve.app.MODEL_COMPARISON_PATH", path)
+    resp = client.get("/api/models/compare")
+    assert resp.status_code == 200
+    assert resp.json() == payload
+
+
+def test_api_models_compare_returns_503_when_missing(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("etchpipe.serve.app.MODEL_COMPARISON_PATH", tmp_path / "missing.json")
+    resp = client.get("/api/models/compare")
+    assert resp.status_code == 503
+
+
+def test_api_gate_history_returns_entries(monkeypatch, tmp_path) -> None:
+    entry = {"action": "promote", "model_id": "m1", "promoted": True, "exit_code": 0, "reasons": []}
+    (tmp_path / "history.jsonl").write_text(json.dumps(entry) + "\n")
+    monkeypatch.setattr("etchpipe.serve.app.REGISTRY_ROOT", tmp_path)
+    resp = client.get("/api/gate/history")
+    assert resp.status_code == 200
+    assert resp.json() == {"entries": [entry]}
+
+
+def test_api_gate_history_empty_when_no_history_file(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("etchpipe.serve.app.REGISTRY_ROOT", tmp_path)
+    resp = client.get("/api/gate/history")
+    assert resp.status_code == 200
+    assert resp.json() == {"entries": []}
+
+
+def test_dashboard_index_served_at_root() -> None:
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "EtchGuard" in resp.text or "식각" in resp.text
+
+
+def test_dashboard_unknown_path_is_404_not_predict_route() -> None:
+    resp = client.get("/no-such-dashboard-page")
+    assert resp.status_code == 404
