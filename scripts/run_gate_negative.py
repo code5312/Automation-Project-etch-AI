@@ -29,7 +29,25 @@ C5 자체 테스트 6종: 정상 통과 / 노이즈 모델 차단 / 1에폭(저�
 어떤 실행 경로도 호출하지 않음). 이 스크립트는 `cd_pred`/`cd_true`에 `depth_pred`/
 `depth_true`를 그대로 복제해서 넘긴다 — 즉 ②의 CD 쪽은 깊이 판정과 같은 신호를 중복
 보는 것일 뿐 독립적인 CD 검증이 아니다. CD 배선은 별도 항목으로 남긴다.
-"""
+
+**ADR-0005 2단계 재검증(2026-11-14 추가)**: 실제 드리프트 승격 경로
+(`retrain/execute.py::make_gate_fn`)는 더 이상 `run_gate`를 안 쓰고
+`check_recipe_pass_rate`(관문 A)·`check_no_regression`(관문 C, 관문 B 제외)를 직접
+쓴다 — 아래 6종 케이스를 `run_gate`(기존)와 **새 함수 양쪽으로 똑같이 재실행**해서
+새 경로도 같은 기준(정상 PASS, 나머지 BLOCK)을 지키는지 검증한다. 관문 C③(val 40
+재확인)은 CI에 없는 `data/raw`가 필요해 이 스크립트에서는 건너뛴다(`check_no_regression`
+의 `val_pass_rate_result=None` 설계대로 — 건너뛰면 그 조건은 자동 통과로 본다는 뜻).
+해시 위조 2종(케이스 5·6)은 `run_gate` 자체의 기능이라 새 경로에 대응 항목이 없다
+(그대로 유지, 재검증 대상 아님).
+
+**실측 결과 중 하나는 "정상 모델"의 기대값 자체가 경로별로 다르다**[확인, 2026-11-14,
+사용자 결정]: `mgn_tuned`는 golden 10개(중심5·경계3·극단2, 일부러 어려운 표본)에서
+레시피별 3조건을 8/10(80%)만 통과해 ADR-0005 신규 경로에서는 BLOCK이 기대값이다 —
+기존 `run_gate`(평균 집계)는 이 2개의 실패를 평균에 묻어 PASS를 낸다. 버그가 아니라
+"평균 집계가 개별 레시피 실패를 가린다"는 ADR-0005의 채택 근거가 그대로 실측 확인된
+것. 실제 승격 판정에 쓰는 세트(golden_drift10+val10=20개, val 40개)에서는 이 문제가
+재현되지 않을 가능성이 높다 — 90% 기준 자체가 val 40 기준 Clopper-Pearson으로 도출된
+값이라 N=10·편향 표본에는 원래 안 맞는다."""
 
 import json
 import pathlib
@@ -44,7 +62,12 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from etchpipe.etl.etl import THETA_KEYS, etl_run  # noqa: E402
 from etchpipe.eval.eval import load_model_a  # noqa: E402
-from etchpipe.gate.gate import run_gate  # noqa: E402
+from etchpipe.gate.gate import (  # noqa: E402
+    GateResult,
+    check_no_regression,
+    check_recipe_pass_rate,
+    run_gate,
+)
 from etchpipe.models.meshgraphnet import MeshGraphNetModel  # noqa: E402
 from etchpipe.train.rollout import rollout_val_error_by_step  # noqa: E402
 
@@ -109,10 +132,13 @@ def evaluate_model(
     model, norm, graphs_root: pathlib.Path,
     fix_mask: bool = True, guard: bool = True, loop_removal: bool = True,
 ) -> dict:
-    """golden 10개 레시피(이미 `graphs_root`에 변환돼 있음)에 대해 `run_gate`에 넘길
-    입력을 구성."""
+    """golden 10개 레시피(이미 `graphs_root`에 변환돼 있음)에 대해 `run_gate`/ADR-0005
+    새 함수(`check_recipe_pass_rate`/`check_no_regression`) 양쪽에 다 넘길 수 있는
+    입력을 구성 — `check_shape=True`로 IoU·HD95도 같이 낸다(ADR-0005 2단계 재검증용,
+    2026-11-14 추가)."""
     depth_pred, depth_true = [], []
     chamfer_by_step_per_recipe = []
+    iou_vals, hd95_vals = [], []
     self_x_total = 0
     for rid in _golden_recipe_ids():
         meta = json.loads((GOLDEN_RAW_DIR / rid / "meta.json").read_text())
@@ -120,13 +146,16 @@ def evaluate_model(
         run_steps = sorted({s for s in STEPS if s <= actual_k} | {actual_k})
         result = rollout_val_error_by_step(
             model, graphs_root, rid, run_steps, meta["step_min"], norm=norm,
-            check_physics=True, fix_mask=fix_mask, guard=guard, loop_removal=loop_removal,
+            check_physics=True, check_shape=True,
+            fix_mask=fix_mask, guard=guard, loop_removal=loop_removal,
         )
         chamfer_by_step_per_recipe.append([result[s]["chamfer"] for s in run_steps])
         final = result[actual_k]
         depth_pred.append(final["depth_pred"])
         depth_true.append(final["depth_true"])
         self_x_total += final["self_intersections"]
+        iou_vals.append(final["iou"])
+        hd95_vals.append(final["hd95"])
     return {
         "depth_pred": depth_pred,
         "depth_true": depth_true,
@@ -134,7 +163,55 @@ def evaluate_model(
         "cd_true": depth_true,
         "rollout_step_errors_by_recipe": chamfer_by_step_per_recipe,
         "self_intersection_count": self_x_total,
+        "iou": iou_vals,
+        "hd95": hd95_vals,
     }
+
+
+def _for_run_gate(inputs: dict) -> dict:
+    """`run_gate`는 `iou`/`hd95` 인자를 모른다 — `evaluate_model`이 양쪽 경로용으로
+    같이 반환하는 값 중 기존 경로에 안 맞는 키만 뺀다."""
+    return {k: v for k, v in inputs.items() if k not in ("iou", "hd95")}
+
+
+def _new_path_gate(gate_cfg: dict, champion_inputs: dict, candidate_inputs: dict) -> GateResult:
+    """ADR-0005 2단계 재검증용 — 실제 `retrain/execute.py::make_gate_fn`과 같은 순서로
+    관문 A(결정3) → 물리 → 관문 C(결정4, 관문 B 제외)를 적용한다. 관문 C③(val 40)은
+    이 스크립트엔 `data/raw`가 없어(CI 제약) 건너뛴다(`val_pass_rate_result=None`)."""
+    gate_a_ok, gate_a_detail = check_recipe_pass_rate(
+        candidate_inputs["depth_pred"], candidate_inputs["depth_true"],
+        candidate_inputs["cd_pred"], candidate_inputs["cd_true"],
+        candidate_inputs["rollout_step_errors_by_recipe"],
+        grid=gate_cfg["grid"], max_dim_pct=gate_cfg["max_dim_pct"], cd_floor=gate_cfg["cd_floor"],
+        rollout_max_ratio=gate_cfg["rollout_max_ratio"],
+        rollout_min_increase=gate_cfg["rollout_min_increase"],
+        pass_rate=gate_cfg["recipe_pass_rate"],
+    )
+    physics_ok = candidate_inputs["self_intersection_count"] == 0
+
+    gate_c_ok, gate_c_detail = True, {}
+    if gate_a_ok and physics_ok:
+        gate_c_ok, gate_c_detail = check_no_regression(
+            candidate_inputs["iou"], champion_inputs["iou"],
+            candidate_inputs["hd95"], champion_inputs["hd95"],
+            val_pass_rate_result=None, alpha=gate_cfg["alpha_retrain"],
+        )
+
+    passed = gate_a_ok and physics_ok and gate_c_ok
+    reasons = []
+    if not gate_a_ok:
+        rate, req = gate_a_detail["pass_rate"], gate_cfg["recipe_pass_rate"]
+        reasons.append(f"recipe pass rate {rate:.2f} < {req}")
+    if not physics_ok:
+        n_x = candidate_inputs["self_intersection_count"]
+        reasons.append(f"physics violation: self_intersections={n_x}")
+    if gate_a_ok and physics_ok and not gate_c_ok:
+        reasons.append(f"regression check (gate C) failed: {gate_c_detail}")
+
+    return GateResult(
+        passed=passed, exit_code=0 if passed else 1, reasons=reasons,
+        reference_metrics={"gate_a": gate_a_detail, "gate_c": gate_c_detail},
+    )
 
 
 def build_cases(graphs_root: pathlib.Path) -> list[dict]:
@@ -150,22 +227,51 @@ def build_cases(graphs_root: pathlib.Path) -> list[dict]:
     mgn_tuned, _, mgn_tuned_norm = load_model_a(MGN_TUNED_CKPT)
 
     cases = []
+    champion_inputs = evaluate_model(mgn_tuned, mgn_tuned_norm, graphs_root)
 
-    inputs = evaluate_model(mgn_tuned, mgn_tuned_norm, graphs_root)
-    cases.append({
-        "name": "정상 모델(mgn_tuned)",
-        "expected_passed": True,
-        "result": run_gate(mgn_tuned, golden_pairs, **gate_kwargs, **inputs),
-    })
+    def _add_pair(
+        name: str,
+        expected_passed: bool,
+        old_result: GateResult,
+        inputs: dict,
+        expected_passed_new: bool | None = None,
+    ) -> None:
+        cases.append({
+            "name": f"{name} [기존 run_gate]",
+            "expected_passed": expected_passed,
+            "result": old_result,
+        })
+        new_result = _new_path_gate(gate_cfg, champion_inputs, inputs)
+        new_expected = expected_passed if expected_passed_new is None else expected_passed_new
+        cases.append({
+            "name": f"{name} [ADR-0005 신규 경로]",
+            "expected_passed": new_expected,
+            "result": new_result,
+        })
+
+    # [확인, 2026-11-14 실측] 정상 모델(mgn_tuned)은 golden 10개 레시피(중심5·경계3·
+    # 극단2로 일부러 어려운 케이스를 섞은 작은 표본)에서 10개 중 8개(80%)만 레시피별
+    # 3조건을 통과한다 — 기존 run_gate(평균 집계)는 이 2개의 실패를 평균에 묻어 PASS를
+    # 내지만, ADR-0005 레시피별 판정은 그대로 드러내 90% 기준에서 BLOCK된다. 버그가
+    # 아니라 설계대로 동작한 것[사용자 결정 2026-11-14]: golden-10은 실제 승격 판정에
+    # 쓰는 세트(golden_drift10+val10=20개, val 40개)가 아니라 CI에 커밋된 유일한
+    # 데이터라 이 재검증에 쓸 뿐이고, 90% 기준 자체는 val 40 기준 Clopper-Pearson으로
+    # 도출된 값이라 N=10·편향 표본에 그대로 적용하면 이렇게 불안정하게 나올 수 있다.
+    # "신규 경로"만 BLOCK(80%)을 기대값으로 삼는다.
+    _add_pair(
+        "정상 모델(mgn_tuned)", True,
+        run_gate(mgn_tuned, golden_pairs, **gate_kwargs, **_for_run_gate(champion_inputs)),
+        champion_inputs,
+        expected_passed_new=False,
+    )
 
     noise_model = MeshGraphNetModel(processor_size=6, hidden_dim_processor=128)
     noise_model.eval()
     inputs = evaluate_model(noise_model, mgn_tuned_norm, graphs_root)
-    cases.append({
-        "name": "노이즈 모델(무작위 가중치, 미학습)",
-        "expected_passed": False,
-        "result": run_gate(noise_model, golden_pairs, **gate_kwargs, **inputs),
-    })
+    _add_pair(
+        "노이즈 모델(무작위 가중치, 미학습)", False,
+        run_gate(noise_model, golden_pairs, **gate_kwargs, **_for_run_gate(inputs)), inputs,
+    )
 
     if EARLY_CKPT.exists():
         early_model, early_note, early_norm = load_model_a(EARLY_CKPT)
@@ -176,19 +282,17 @@ def build_cases(graphs_root: pathlib.Path) -> list[dict]:
         early_case_norm = mgn_tuned_norm
         early_name = "저학습 모델(합성 대체 — CI에 체크포인트 없음, 로컬 실측은 W5-09 증거 참고)"
     inputs = evaluate_model(early_model, early_case_norm, graphs_root)
-    cases.append({
-        "name": f"{early_name}, 설계서 '1에폭' 모델 대체재",
-        "expected_passed": False,
-        "result": run_gate(early_model, golden_pairs, **gate_kwargs, **inputs),
-    })
+    _add_pair(
+        f"{early_name}, 설계서 '1에폭' 모델 대체재", False,
+        run_gate(early_model, golden_pairs, **gate_kwargs, **_for_run_gate(inputs)), inputs,
+    )
 
     sim_version_model = SyntheticDepthBiasModel(mgn_tuned, y_scale=1.6)
     inputs = evaluate_model(sim_version_model, mgn_tuned_norm, graphs_root)
-    cases.append({
-        "name": "시뮬레이터 버전 변경 데이터로 학습한 모델(합성 대체 — 실제 체크포인트 아님)",
-        "expected_passed": False,
-        "result": run_gate(sim_version_model, golden_pairs, **gate_kwargs, **inputs),
-    })
+    _add_pair(
+        "시뮬레이터 버전 변경 데이터로 학습한 모델(합성 대체 — 실제 체크포인트 아님)", False,
+        run_gate(sim_version_model, golden_pairs, **gate_kwargs, **_for_run_gate(inputs)), inputs,
+    )
 
     r5 = run_gate(
         mgn_tuned, golden_pairs, max_chamfer=gate_cfg["max_chamfer"],
