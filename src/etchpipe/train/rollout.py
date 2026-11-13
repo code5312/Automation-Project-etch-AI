@@ -30,7 +30,15 @@ import numpy as np
 import torch
 
 from etchpipe.etl.etl import outer_path, remove_self_crossing_loops
-from etchpipe.eval.metrics import chamfer_distance, depth, depth_error, self_intersection_count
+from etchpipe.eval.metrics import (
+    chamfer_distance,
+    depth,
+    depth_error,
+    hd95,
+    iou,
+    mask_from_points,
+    self_intersection_count,
+)
 from etchpipe.train.loop import NodeEdgeNorm, load_graph, normalize_edge, normalize_node
 
 
@@ -187,6 +195,8 @@ def rollout_val_error_by_step(
     guard: bool = False,
     guard_shrink: tuple[float, ...] = (0.5, 0.25, 0.0),
     loop_removal: bool = False,
+    check_shape: bool = False,
+    xr: tuple[float, float] = (-15.0, 15.0),
 ) -> dict[int, dict[str, float]]:
     """`g000.npz`(t=0)에서 `max(steps)`까지 롤아웃하고, `steps`의 각 스텝에서 실제
     `g<step>.npz`와 비교(W5-01, 설계서 C4 "스텝 5·10·20 보고") — 최종 스텝만 보면
@@ -215,11 +225,19 @@ def rollout_val_error_by_step(
     발산해(`outer_path`가 왼쪽/오른쪽 열린 끝점을 못 찾음) 표면 자체를 복원 못 하면
     예외를 전파하지 않고 원본 점 배열로 대체 계산하고 `self_intersections=1`(명백한
     물리 위반)로 집계한다 — 토이 모델에 정규화 없이 실제 θ 크기를 그대로 먹여 1스텝에
-    발산하는 경우로 실측 확인."""
+    발산하는 경우로 실측 확인.
+
+    `check_shape=True`면 각 스텝마다 `iou`(ADR-0005 결정2, 처음 고체였던 칸 기준)와
+    `hd95`도 같이 낸다 [제안, ADR-0005 결정4 배선 — 관문 C①②가 레시피별 IoU·HD95를
+    필요로 함]. `mask_from_points`로 격자 마스크를 만드는데(`xr` 기본 `inference.py`와
+    동일 (-15,15)), t=0(`g0`) 마스크를 "처음 고체였던 칸" 기준으로 한 번만 만들어
+    모든 스텝에서 재사용한다 — 식각이 안쪽으로만 진행되고(언더컷 제외) 마스크 자체는
+    거의 안 변하므로 t=0 기준이면 충분하다[제안]."""
     root = Path(graphs_root) / run_id
     g0 = load_graph(root / "g000.npz")
     max_step = max(steps)
     pred_lines = lines_from_edge_index(g0["edge_index"])
+    mask_initial = mask_from_points(g0["pos"].numpy(), pred_lines, xr=xr) if check_shape else None
 
     positions = rollout(
         model, g0["node"], g0["edge_index"], g0["edge"], g0["pos"], max_step, step_min, norm,
@@ -255,6 +273,11 @@ def rollout_val_error_by_step(
             entry["self_intersections"] = (
                 1 if diverged else self_intersection_count(pred_curve)
             )
+        if check_shape:
+            entry["hd95"] = hd95(pred_curve, true_curve)
+            mask_pred = mask_from_points(pred_s, pred_lines, xr=xr)
+            mask_true = mask_from_points(true_graph["pos"].numpy(), true_lines, xr=xr)
+            entry["iou"] = iou(mask_pred, mask_true, mask_initial)
         result[s] = entry
     return result
 

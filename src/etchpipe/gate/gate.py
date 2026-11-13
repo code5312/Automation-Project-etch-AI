@@ -10,6 +10,7 @@ ADR-0004(2026-11-11, 골든셋 공식 채점 노트북 기준): **①(골든 Cha
 """
 
 import json
+import math
 import pathlib
 from dataclasses import asdict, dataclass, field
 
@@ -128,6 +129,135 @@ def check_rollout_late_step_multi(
     half = len(errors) // 2
     ratio = float(errors[half:].mean() / errors[:half].mean())
     return ratio <= max_ratio, ratio
+
+
+def check_rollout_recipe(
+    step_errors: list[float], max_ratio: float = 2.5, min_increase: float = 0.3
+) -> tuple[bool, float, float]:
+    """ADR-0005 결정3: 레시피 1개의 롤아웃 오차 증가를 **비율 OR 증가량**으로 판정한다
+    (기존 `check_rollout_late_step`은 비율만 봄) — 전/후반 평균 비율이 `max_ratio`
+    이하이거나, 증가량(후반-전반)이 `min_increase` 이하면 통과. 오차가 사실상 0이면
+    (전반 평균 <1e-6) 비율이 계산 잔차로 튀는 걸 막기 위해 자동 통과(기존 관례와 동일,
+    ADR-0004 결정3 제로 가드 유지). 반환: (통과여부, 비율, 증가량)."""
+    if len(step_errors) < 2:
+        return True, 1.0, 0.0
+    half = len(step_errors) // 2
+    early = sum(step_errors[:half]) / half
+    late = sum(step_errors[half:]) / (len(step_errors) - half)
+    if early < 1e-6:
+        return True, 1.0, 0.0
+    ratio = late / early
+    increase = late - early
+    return (ratio <= max_ratio or increase <= min_increase), ratio, increase
+
+
+def check_recipe_pass_rate(
+    depth_pred: list[float],
+    depth_true: list[float],
+    cd_pred: list[float],
+    cd_true: list[float],
+    rollout_step_errors_by_recipe: list[list[float]],
+    grid: float = 0.3,
+    max_dim_pct: float = 5.0,
+    cd_floor: float = 0.6,
+    rollout_max_ratio: float = 2.5,
+    rollout_min_increase: float = 0.3,
+    pass_rate: float = 0.9,
+) -> tuple[bool, dict]:
+    """ADR-0005 결정3 — 게이트 판정의 집계 축을 "레시피 묶음 평균"에서 "레시피별 판정 +
+    통과율"로 바꾼다. 레시피마다 깊이(`grid` 하한)·중간CD(`cd_floor` 하한)·롤아웃
+    (`check_rollout_recipe`) 3조건을 **독립적으로** 판정하고, 셋 다 충족한 레시피
+    비율이 `pass_rate`(기본 90%) 이상이면 합격. 근거: Clopper-Pearson 95% 신뢰하한
+    (36/40 충족 시 실제 충족률 하한 0.79, 문서 §5).
+
+    **계산 실패 레시피 처리** [문서 §3]: `depth_pred[i]`/`cd_pred[i]`/해당 레시피의
+    롤아웃 스텝 오차 중 하나라도 유한하지 않으면(NaN/inf) 그 레시피는 **세 조건 모두
+    미충족**으로 센다 — 통과율 분모에는 포함하되 통과로 잘못 집계되지 않게 한다."""
+    n = len(depth_pred)
+    per_recipe: list[dict] = []
+    n_passed = 0
+    for i in range(n):
+        step_errors = rollout_step_errors_by_recipe[i]
+        calc_ok = (
+            math.isfinite(depth_pred[i])
+            and math.isfinite(cd_pred[i])
+            and all(math.isfinite(e) for e in step_errors)
+        )
+        if not calc_ok:
+            per_recipe.append(
+                {"depth_ok": False, "cd_ok": False, "rollout_ok": False, "calc_failed": True}
+            )
+            continue
+        depth_ok, depth_detail = check_dimension_error(
+            [depth_pred[i]], [depth_true[i]], grid, max_dim_pct
+        )
+        cd_ok, cd_detail = check_dimension_error([cd_pred[i]], [cd_true[i]], cd_floor, max_dim_pct)
+        rollout_ok, ratio, increase = check_rollout_recipe(
+            step_errors, rollout_max_ratio, rollout_min_increase
+        )
+        recipe_ok = depth_ok and cd_ok and rollout_ok
+        n_passed += int(recipe_ok)
+        per_recipe.append(
+            {
+                "depth_ok": depth_ok, "depth_detail": depth_detail,
+                "cd_ok": cd_ok, "cd_detail": cd_detail,
+                "rollout_ok": rollout_ok, "rollout_ratio": ratio, "rollout_increase": increase,
+                "calc_failed": False,
+            }
+        )
+    fraction = (n_passed / n) if n else 0.0
+    detail = {"n": n, "n_passed": n_passed, "pass_rate": fraction, "per_recipe": per_recipe}
+    return fraction >= pass_rate, detail
+
+
+def check_no_regression(
+    candidate_iou: list[float],
+    champion_iou: list[float],
+    candidate_hd95: list[float],
+    champion_hd95: list[float],
+    val_pass_rate_result: tuple[bool, dict] | None = None,
+    alpha: float = 0.0125,
+    max_hd95_degradation: float = 0.3,
+) -> tuple[bool, dict]:
+    """ADR-0005 결정4 — 승격 관문 C(퇴보 없음), **관문 B(개선 검정)는 범위 제외**(ADR
+    재결정, "정기 재학습" 코드패스가 없어 적용 대상이 없음). 레시피별 1:1 비교(같은
+    레시피에서 챔피언 vs 후보):
+
+    ① IoU가 챔피언 대비 유의하게 낮아지지 않음 — 윌콕슨 부호순위 단측 검정
+    (H1: candidate < champion), p < alpha면 유의하게 나빠진 것으로 보고 차단.
+    ② 최악 레시피의 HD95 악화(candidate - champion의 최댓값) ≤ `max_hd95_degradation`.
+    ③ `val_pass_rate_result`(val 40에 `check_recipe_pass_rate`를 다시 적용한 결과)가
+    주어지면 그것도 합격이어야 한다 — 드리프트 데이터로 재학습한 뒤 기존 조건 성능이
+    떨어지는 것 방지. `None`이면(호출부가 아직 안 돌렸으면) 건너뛰고 통과로 본다.
+
+    `alpha` 기본값은 ADR-0002 재학습 루프 최대 시도 횟수(4회) 기준 본페로니 보정값
+    (0.05/4=0.0125) — 호출부가 실제 시도 횟수에 맞게 넘겨야 한다."""
+    from scipy.stats import wilcoxon
+
+    cand, champ = np.asarray(candidate_iou, dtype=float), np.asarray(champion_iou, dtype=float)
+    if np.allclose(cand, champ):
+        iou_ok, iou_p = True, 1.0  # 완전히 동일 — wilcoxon이 못 다루는 전부-0 차이 케이스
+    else:
+        try:
+            _, iou_p = wilcoxon(cand, champ, alternative="less")
+            iou_ok = bool(iou_p >= alpha)
+        except ValueError:
+            # 표본 부족 등으로 검정 자체가 불가능 — 근거 없이 차단하지 않고 통과(미확인 표시)
+            iou_ok, iou_p = True, float("nan")
+
+    degradations = [c - ch for c, ch in zip(candidate_hd95, champion_hd95, strict=True)]
+    worst_degradation = max(degradations) if degradations else 0.0
+    hd95_ok = worst_degradation <= max_hd95_degradation
+
+    val_ok = True if val_pass_rate_result is None else val_pass_rate_result[0]
+
+    passed = iou_ok and hd95_ok and val_ok
+    detail = {
+        "iou_wilcoxon_p": iou_p, "alpha": alpha, "iou_not_regressed": iou_ok,
+        "worst_hd95_degradation": worst_degradation, "max_hd95_degradation": max_hd95_degradation,
+        "hd95_ok": hd95_ok, "val_pass_rate_ok": val_ok,
+    }
+    return passed, detail
 
 
 def check_latency(latency_s: float | None, max_latency_s: float | None) -> str | None:

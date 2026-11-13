@@ -5,8 +5,11 @@
   **결정 4(승격 통계 검정) 중 관문 B(정기 재학습 개선 검정)는 범위에서 제외**(아래
   재결정 참고). 실행·검증은 로컬이 아닌 별도 환경에서 진행.
   **1단계(결정 1·2·2-1·6) 구현 완료(2026-11-14)** — 증거:
-  `reports/evidence/ADR-0005_stage1_metrics.md`. 2단계(결정 3·5, 드리프트 트리거
-  경로 A+C)는 아직 미착수.
+  `reports/evidence/ADR-0005_stage1_metrics.md`.
+  **2단계(결정 3·4(관문 C만)·5) 구현 완료(2026-11-14)** — 증거:
+  `reports/evidence/ADR-0005_stage2_gate_rewrite.md`. 실제 챔피언 체크포인트·실제
+  드리프트/val 데이터로 전체 경로(Gate A → 물리 → Gate C③ val40 재확인 → Gate C①②
+  윌콕슨/HD95) 실행 확인.
 - CLAUDE.md 작업규칙 6: "인터페이스는 2주차 말에 동결. 변경은 ADR 작성 후에만." — ADR-0004가
   이미 한 번 같은 절차로 게이트 규칙을 바꾼 전례가 있다. 이 ADR은 그 두 번째 보정이다.
 - 영향 문서: `docs/project-definition.md` §9, `docs/project-design.md` C4/C5/C8,

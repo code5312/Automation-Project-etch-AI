@@ -307,6 +307,13 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   ADR-0004, `reports/evidence/ADR-0004_chamfer_gate_rework.md`. **주의**: 설계서 §3 C5
   "자체 테스트" 목록(노이즈/1에폭/시뮬레이터 버전 변경 모델 차단)은 ①만으로는 더 이상
   안 막히므로, W5-06 작성 시 ②④물리 중 하나를 같이 걸어야 함.
+  **갱신(2026-11-14, ADR-0005 2단계)**: 드리프트 트리거 경로(`retrain/execute.py::
+  make_gate_fn`)는 이제 `run_gate`가 아니라 `check_recipe_pass_rate`/
+  `check_no_regression`을 직접 쓴다(ADR-0005 — 레시피별 통과율+윌콕슨). **`run_gate`는
+  그대로 남아있고 W5-06 부정 테스트도 그대로 `run_gate`를 검증한다 — 즉 W5-06의 6종
+  시나리오(노이즈/1에폭/시뮬레이터버전변경 차단 등)는 실제 드리프트 승격 경로가 쓰는
+  새 함수들에 대해서는 아직 재검증되지 않았다**[미확인, ADR-0005 문서 §9.2 검증계획이
+  요구하는 작업 — `reports/evidence/ADR-0005_stage2_gate_rewrite.md` "미확인" 참고].
 - [x] W5-06 **부정 테스트 6종**(설계서 §3 C5): 정상 통과 / 노이즈 모델 차단 / 1에폭 모델 차단 / 시뮬레이터 버전 변경 데이터로 학습한 모델 차단 / `dataset_hash` 불일치(코드 2) / 골든 변조(코드 2)
   — **완료(2026-11-12)**: `scripts/run_gate_negative.py`를 실모델 기준으로 재작성.
   데이터는 `golden/raw/`(git 커밋됨), 체크포인트는 `runs/mgn_tuned/model.pt` 1개만
