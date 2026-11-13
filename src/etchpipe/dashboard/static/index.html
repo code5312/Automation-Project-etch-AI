@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#152438">
+  <title>식각 단면 분석 · EtchGuard</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="vendor/plotly-4.1.1.min.js"></script>
+  <script defer src="predict.js"></script>
+  <script defer src="r0007-reference.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap masthead-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">∿</span>EtchGuard</div>
+      <span id="source-label" class="mode">예제 모드 <b>합성 응답</b></span>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="page-title">
+      <h1>식각 단면 분석</h1>
+      <p>레시피를 실행하고 시간별 단면과 ViennaPS 기준을 비교합니다.</p>
+    </div>
+    <div class="workspace">
+      <section class="panel recipe-panel" aria-labelledby="recipe-title">
+        <div class="panel-header">
+          <h2 id="recipe-title">레시피 입력</h2>
+          <button type="button" id="reset" class="secondary">r0007 불러오기</button>
+        </div>
+        <form id="recipe" novalidate>
+          <div class="recipe-context">
+            <strong id="draft-recipe">Golden10 · r0007</strong>
+            <p>플럭스는 ViennaPS 입력 스케일로 표시합니다.</p>
+          </div>
+          <div class="fields" id="fields"></div>
+          <fieldset class="time-fieldset">
+            <legend>예측 시간 <span>분</span></legend>
+            <div class="choices" id="request-times" role="group" aria-label="요청할 시간" aria-describedby="time-error">
+              <button type="button" data-time="2" aria-pressed="true">2분</button>
+              <button type="button" data-time="5" aria-pressed="true">5분</button>
+            </div>
+            <details class="add-time">
+              <summary>다른 시간 추가</summary>
+              <div class="add-time-row">
+                <label class="visually-hidden" for="extra-time">추가할 시간 (1~20분의 정수)</label>
+                <input type="number" id="extra-time" min="1" max="20" step="1" placeholder="1~20분" aria-describedby="extra-time-error">
+                <button type="button" class="secondary" id="add-time">추가</button>
+              </div>
+              <p class="field-error" id="extra-time-error" hidden></p>
+            </details>
+            <p class="field-error" id="time-error" hidden></p>
+          </fieldset>
+          <button type="submit" id="submit" class="primary">단면 예측</button>
+        </form>
+      </section>
+
+      <div class="analysis" id="analysis" aria-busy="false">
+        <p id="status" class="message" role="status" hidden></p>
+        <div id="result" hidden>
+          <section class="panel plot-panel" aria-labelledby="chart-title">
+            <div class="panel-header plot-header">
+              <div>
+                <h2 id="chart-title">단면 비교</h2>
+                <p id="run-context" class="run-context" role="status"></p>
+              </div>
+              <button type="button" id="save-chart" class="secondary"><span aria-hidden="true">↓</span> PNG 저장</button>
+            </div>
+            <div class="plot-toolbar">
+              <div class="choices" id="profiles" role="group" aria-label="표시할 단면 시간"></div>
+              <button type="button" id="overlay-times" class="secondary overlay" aria-pressed="false">두 시간 겹치기</button>
+            </div>
+            <div id="chart" role="img"></div>
+            <div class="plot-caption">
+              <ul id="plot-key" class="plot-key" aria-label="단면 출처"></ul>
+              <label class="reference-toggle"><input type="checkbox" id="show-reference" checked> ViennaPS 기준 표시</label>
+            </div>
+            <p id="reference-note" class="reference-note"></p>
+          </section>
+
+          <section class="panel measurements" aria-labelledby="measurements-title">
+            <div class="panel-header">
+              <h2 id="measurements-title">결과 확인</h2>
+              <span id="measurement-time" class="context-label"></span>
+            </div>
+            <p id="notice" class="message warning" role="status" hidden></p>
+            <div class="result-columns">
+              <div>
+                <h3>단면에서 계산한 깊이 <span>µm</span></h3>
+                <table class="data-table">
+                  <thead><tr><th scope="col">시점</th><th scope="col" id="depth-source">합성 응답</th><th scope="col">ViennaPS</th></tr></thead>
+                  <tbody id="depth-rows"></tbody>
+                </table>
+                <p class="help">Si 표면 y=0에서 각 윤곽의 가장 낮은 점까지.</p>
+              </div>
+              <div class="response-metrics">
+                <h3 id="metrics-time"></h3>
+                <dl>
+                  <div><dt>식각 깊이</dt><dd id="depth"></dd></div>
+                  <div><dt>중간 CD</dt><dd id="cd"></dd></div>
+                  <div><dt>테이퍼</dt><dd id="taper"></dd></div>
+                </dl>
+              </div>
+            </div>
+            <details class="provenance">
+              <summary>제출 레시피와 데이터 출처</summary>
+              <dl class="source-details">
+                <div><dt>제출한 조건</dt><dd id="submitted-recipe"></dd></div>
+                <div><dt>응답 출처</dt><dd id="response-source"></dd></div>
+                <div><dt>기준 판본</dt><dd>ViennaPS 4.5.0 · Golden10 r0007 · <a href="https://github.com/code5312/Automation-Project-etch-AI/tree/f5ee15aa62ea79ed84a9b4f16d72ab1bfb19173c/golden/raw/r0007" target="_blank" rel="noopener">f5ee15a 원본</a></dd></div>
+                <div><dt>표시 기준 파일</dt><dd id="reference-files"></dd></div>
+              </dl>
+              <table class="data-table submitted-table">
+                <thead><tr><th scope="col">파라미터</th><th scope="col">제출값</th><th scope="col">단위</th></tr></thead>
+                <tbody id="submitted-fields"></tbody>
+              </table>
+              <div class="copy-details">
+                <button type="button" id="copy-run" class="secondary">실행 정보 복사</button>
+                <span id="copy-status" class="help" role="status"></span>
+              </div>
+              <textarea id="copy-text" aria-label="복사할 실행 정보" readonly hidden></textarea>
+            </details>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
