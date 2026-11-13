@@ -49,6 +49,18 @@ def _empty_registry(tmp_path):
     return Registry(tmp_path / "registry")
 
 
+# _validate_card(inference.py, PR#9 "W7-03 챔피언 로드 실패와 서빙 복구 보완"에서 추가)가
+# THETA_KEYS 전부에 valid_range[key]["min"/"max"]를 요구한다 — 빈 dict로 register()하면
+# load_champion()이 KeyError를 ChampionUnavailable로 삼켜버려 캐싱 테스트 자체가 실패한다.
+_VALID_RANGE_FIXTURE = {
+    key: {"min": 0.0, "max": 1.0}
+    for key in [
+        "ion_flux", "etchant_flux", "oxygen_flux", "ion_mean_energy",
+        "ion_exponent", "mask_width", "mask_height",
+    ]
+}
+
+
 def test_load_champion_raises_when_no_champion_registered(monkeypatch, tmp_path) -> None:
     from etchpipe.serve import inference
 
@@ -76,7 +88,7 @@ def test_load_champion_raises_when_artifact_path_unknown(monkeypatch, tmp_path) 
         dataset_hash="deadbeef0000", config={}, git_sha="unknown", metrics={}, valid_range={},
     )
 
-    with pytest.raises(ChampionUnavailable, match="체크포인트 경로를 모릅니다"):
+    with pytest.raises(ChampionUnavailable, match="체크포인트를 찾을 수 없습니다"):
         inference.load_champion()
 
 
@@ -117,7 +129,8 @@ def test_load_champion_caches_result_and_does_not_reverify(monkeypatch, tmp_path
     ckpt_path.write_bytes(b"checkpoint-bytes")
     reg.register(
         model_id, ckpt_path, GateResult(passed=True, exit_code=0),
-        dataset_hash="deadbeef0000", config={}, git_sha="unknown", metrics={}, valid_range={},
+        dataset_hash="deadbeef0000", config={}, git_sha="unknown", metrics={},
+        valid_range=_VALID_RANGE_FIXTURE,
     )
 
     calls = {"n": 0}
