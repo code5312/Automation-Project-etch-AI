@@ -4,7 +4,11 @@ const gateHistoryView = (() => {
   const dateFormat = new Intl.DateTimeFormat('ko-KR', {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
   });
+  const refresh = document.getElementById('history-refresh');
+  const status = document.getElementById('history-status');
+  const result = document.getElementById('history-result');
   let loaded = false;
+  let loading = false;
 
   function statusCell(entry) {
     const cell = document.createElement('td');
@@ -51,20 +55,23 @@ const gateHistoryView = (() => {
     }
   }
 
-  async function load() {
-    if (loaded) return;
-    loaded = true;
-    const status = document.getElementById('history-status');
-    const result = document.getElementById('history-result');
+  async function load(force = false) {
+    if (loading || (loaded && !force)) return;
+    loading = true;
+    refresh.setAttribute('aria-disabled', 'true');
     status.hidden = false;
-    result.hidden = true;
     status.className = 'message';
     status.textContent = '게이트 이력을 불러오는 중입니다.';
     try {
-      const resp = await fetch('/api/gate/history');
+      const resp = await fetch('/api/gate/history', { cache: 'no-store' });
       if (!resp.ok) throw new Error(`이력을 불러오지 못했습니다 (${resp.status}).`);
       const { entries } = await resp.json();
+      if (!Array.isArray(entries) || entries.some(entry => !entry || typeof entry.model_id !== 'string')) {
+        throw new Error('게이트 이력 응답 형식을 확인할 수 없습니다.');
+      }
+      loaded = true;
       if (!entries.length) {
+        result.hidden = true;
         status.textContent = '아직 기록된 이력이 없습니다.';
         return;
       }
@@ -73,11 +80,15 @@ const gateHistoryView = (() => {
       status.hidden = true;
       result.hidden = false;
     } catch (error) {
-      loaded = false;
       status.className = 'message error';
-      status.textContent = error.message;
+      const previous = result.hidden ? '' : ' 이전 조회 결과를 표시합니다.';
+      status.textContent = `${error.message}${previous}`;
+    } finally {
+      loading = false;
+      refresh.removeAttribute('aria-disabled');
     }
   }
 
+  refresh.addEventListener('click', () => load(true));
   return { load };
 })();

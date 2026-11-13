@@ -21,6 +21,8 @@ ViennaLS 레벨셋 메싱 결과라(레시피별 점 개수가 다름, 실측 �
 
 from __future__ import annotations
 
+import logging
+import math
 import pathlib
 import tempfile
 from typing import TYPE_CHECKING
@@ -34,6 +36,7 @@ if TYPE_CHECKING:
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 REGISTRY_ROOT = REPO_ROOT / "registry"
+logger = logging.getLogger(__name__)
 
 GRID_DELTA = 0.3  # configs/sim/base.yaml sim.grid_delta — 학습 데이터 생성과 동일 조건
 STEP_MIN = 1.0  # run_sim.py STEP_MIN과 동일
@@ -64,23 +67,48 @@ class ChampionUnavailable(RuntimeError):
 _cache: dict[str, dict] = {}
 
 
+def _validate_card(card: dict) -> None:
+    from etchpipe.etl.etl import THETA_KEYS
+
+    for key in THETA_KEYS:
+        bounds = card["valid_range"][key]
+        lower, upper = bounds["min"], bounds["max"]
+        if any(
+            type(value) not in (int, float) or not math.isfinite(value)
+            for value in (lower, upper)
+        ):
+            raise ValueError(f"Invalid range bounds for {key}")
+        if lower > upper:
+            raise ValueError(f"Reversed range bounds for {key}")
+    gate_result = card["gate_result"]
+    if gate_result is not None and not isinstance(gate_result, dict):
+        raise ValueError("Invalid gate result")
+
+
 def load_champion() -> dict:
     """프로세스당 한 번만 로드하고 캐시(서빙은 추론마다 체크포인트를 다시 읽지 않는다)."""
     if "champion" in _cache:
         return _cache["champion"]
     reg = Registry(REGISTRY_ROOT)
-    model_id = reg.current_champion()
-    if model_id is None:
-        raise ChampionUnavailable("레지스트리에 등록된 champion이 없습니다.")
-    artifact_path = _artifact_path_for(model_id)
-    if artifact_path is None:
-        raise ChampionUnavailable(f"model_id {model_id!r}의 체크포인트 경로를 모릅니다.")
-    if not reg.verify_artifact(model_id, artifact_path):
-        raise ChampionUnavailable(f"아티팩트 무결성 검증 실패: {model_id}")
-    card = reg.load_card(model_id)
-    from etchpipe.eval.eval import load_model_a  # 지연 임포트(torch/physicsnemo)
+    try:
+        model_id = reg.current_champion()
+        if not model_id:
+            raise ChampionUnavailable("레지스트리에 등록된 champion이 없습니다.")
+        artifact_path = _artifact_path_for(model_id)
+        if artifact_path is None or not artifact_path.is_file():
+            raise ChampionUnavailable("챔피언 체크포인트를 찾을 수 없습니다.")
+        if not reg.verify_artifact(model_id, artifact_path):
+            raise ChampionUnavailable(f"아티팩트 무결성 검증 실패: {model_id}")
+        card = reg.load_card(model_id)
+        _validate_card(card)
+        from etchpipe.eval.eval import load_model_a  # 지연 임포트(torch/physicsnemo)
 
-    model, _note, norm = load_model_a(artifact_path)
+        model, _note, norm = load_model_a(artifact_path)
+    except ChampionUnavailable:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to load the registered champion")
+        raise ChampionUnavailable("챔피언 모델을 불러올 수 없습니다.") from exc
     _cache["champion"] = {"model_id": model_id, "model": model, "norm": norm, "card": card}
     return _cache["champion"]
 

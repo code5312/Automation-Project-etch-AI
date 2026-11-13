@@ -12,8 +12,20 @@ curl http://localhost:8000/health
 docker compose down
 ```
 
-`docker-compose.yml`이 `src/`·`registry/`·`runs/mgn_tuned/`를 읽기 전용으로 마운트하고
-8000번 포트로 띄운다.
+`docker-compose.yml`은 8000번 포트에서 API와 대시보드를 서빙한다. 다음 파일을 읽기 전용으로 연결한다.
+
+| 경로 | 역할 |
+| --- | --- |
+| `src/` | 서빙 코드와 대시보드 |
+| `registry/` | `current`, 현재 모델의 `card.json`, 게이트 이력 `history.jsonl` |
+| `runs/mgn_tuned/` | 기존 champion의 `model.pt` |
+| `runs/retrain/` | 재학습 champion의 `<model_id>/model.pt` |
+| `reports/eval/` | 모델 비교에 사용하는 `W6-12_model_comparison.json` |
+
+브라우저에서 `http://localhost:8000/`을 열고, 인증된 `GET /model`의 모델 ID를
+`registry/current`와 대조한다. 이어서 `r0007`의 2분·5분 예측과 PNG, 모델 비교, 게이트 이력을 확인한다.
+체크포인트는 모델 카드의 SHA-256과 일치해야 한다. 승격 또는 롤백 후에는
+`docker compose restart serve`로 캐시를 비운 뒤, `/model`과 새 예측이 같은 모델 ID를 반환하는지 확인한다.
 
 ## 방식 ② 직접 실행(compose 없이 `docker run`)
 
@@ -23,6 +35,8 @@ docker run -d --name etch-serve-direct -p 8001:8000 \
   -v "$(pwd)/src:/app/src:ro" \
   -v "$(pwd)/registry:/app/registry:ro" \
   -v "$(pwd)/runs/mgn_tuned:/app/runs/mgn_tuned:ro" \
+  -v "$(pwd)/runs/retrain:/app/runs/retrain:ro" \
+  -v "$(pwd)/reports/eval:/app/reports/eval:ro" \
   -w /app etch-serve:0.1 \
   uvicorn etchpipe.serve.app:app --host 0.0.0.0 --port 8000
 curl http://localhost:8001/health

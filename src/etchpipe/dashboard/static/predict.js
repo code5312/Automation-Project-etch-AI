@@ -55,7 +55,7 @@ const prediction = (() => {
     };
   }
 
-  function readResult(payload) {
+  function readResult(payload, requestedTimes) {
     const result = payload?.results?.[0];
     if (typeof payload?.model_version !== 'string' || !result || !Array.isArray(result.profiles) ||
         !result.profiles.length || ![result.depth, result.cd, result.taper_deg].every(Number.isFinite) ||
@@ -65,24 +65,42 @@ const prediction = (() => {
             point.length !== 2 || !point.every(Number.isFinite)))) {
       throw new Error('예측 응답 형식을 확인할 수 없습니다.');
     }
+    // The backend returns profiles in request order and computes metrics for the last profile.
+    const lastReturnedTime = result.profiles.at(-1).t;
+    const timeLimit = result.clamped ? lastReturnedTime : Infinity;
+    const validTimes = result.profiles.length === requestedTimes.length &&
+      (!result.clamped || (Number.isInteger(timeLimit) && timeLimit > 0 && timeLimit < requestedTimes.at(-1))) &&
+      result.profiles.every(({ t }, index) => t === Math.min(requestedTimes[index], timeLimit));
+    if (!validTimes) throw new Error('요청한 시점과 예측 응답이 일치하지 않습니다. 다시 실행해 주세요.');
     return { ...result, modelVersion: payload.model_version };
   }
 
-  // Connect after the team supplies a same-origin proxy that authenticates upstream.
   async function apiPredict(request) {
-    const response = await fetch('/api/predict', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request),
-      signal: AbortSignal.timeout(120_000),
-    });
+    const signal = AbortSignal.timeout(120_000);
+    let response;
+    try {
+      response = await fetch('/api/predict', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request),
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted) throw new Error('예측 응답 시간이 초과됐습니다. 다시 실행해 주세요.');
+      throw new Error('예측 서버에 연결할 수 없습니다. 연결을 확인해 주세요.');
+    }
     if (!response.ok) {
       const messages = {
         401: '예측 API 인증 설정을 확인하세요.', 403: '예측 API 접근 권한을 확인하세요.',
         413: '예측 요청 크기를 줄여주세요.', 422: '서버가 레시피 또는 예측 시간을 처리할 수 없습니다.',
-        429: '요청이 많습니다. 잠시 뒤 다시 실행하세요.', 503: '사용 가능한 챔피언 모델을 확인하세요.',
+        429: '요청이 많습니다. 잠시 뒤 다시 실행하세요.', 503: '예측 모델을 사용할 수 없습니다. 잠시 뒤 다시 실행하세요.',
       };
       throw new Error(messages[response.status] ?? `예측 요청이 실패했습니다 (${response.status}).`);
     }
-    return response.json();
+    try {
+      return await response.json();
+    } catch (error) {
+      if (signal.aborted) throw new Error('예측 응답 시간이 초과됐습니다. 다시 실행해 주세요.');
+      throw new Error('예측 응답 형식을 확인할 수 없습니다.');
+    }
   }
 
   return { fields, buildRequest, demoPredict, apiPredict, readResult };

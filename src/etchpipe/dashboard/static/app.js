@@ -1,7 +1,11 @@
 const get = (id) => document.getElementById(id);
 const form = get('recipe');
-const chart = get('chart');
+let chart = get('chart');
 const status = get('status');
+const submit = get('submit');
+const predictionFeedback = get('prediction-feedback');
+const predictionMessage = get('prediction-message');
+const predictionElapsed = get('prediction-elapsed');
 const requestTimes = get('request-times');
 const profileButtons = get('profiles');
 const overlayButton = get('overlay-times');
@@ -74,13 +78,28 @@ function showStatus(message = '', tone = '') {
   status.hidden = !message;
 }
 
+function showPredictionFeedback(message = '', tone = '') {
+  predictionMessage.textContent = message;
+  predictionFeedback.classList.toggle('message', Boolean(message));
+  predictionFeedback.classList.toggle('error', tone === 'error');
+}
+
+function recipeRows(recipe) {
+  return prediction.fields.map(({ key, label, unit }) => ({
+    label, value: String(recipe[key]), unit: unit ?? 'ViennaPS 입력 스케일',
+  }));
+}
+
 function markEdited() {
+  submit.textContent = '단면 예측';
+  showPredictionFeedback();
   const draft = Object.fromEntries(new FormData(form));
   get('draft-recipe').textContent = matchesPreset(draft) ? 'Golden10 · r0007' : '사용자 정의 레시피';
   const stale = current && (
     prediction.fields.some(({ key }) => current.recipe[key] !== Number(draft[key])) ||
     current.times.join(',') !== sortedTimes().join(',')
   );
+  get('save-chart-note').hidden = !stale;
   showStatus(stale ? '이전 입력으로 실행한 결과입니다. 바꾼 조건으로 보려면 단면 예측을 누르세요.' : '', 'warning');
 }
 
@@ -123,12 +142,12 @@ function addTime() {
   requestTimes.querySelector(`[data-time="${time}"]`).focus();
 }
 
-function makeView(run) {
-  const profiles = overlay ? run.profiles : [run.profiles[activeIndex]];
+function makeView(run, index = activeIndex, showOverlay = overlay) {
+  const profiles = showOverlay ? run.profiles : [run.profiles[index]];
   const available = profiles.filter(({ t }) => referenceAt(run, t));
   const shown = showReference ? available : [];
   const series = profiles.flatMap(({ t, points }, index) => {
-    const earlier = overlay && index === 0;
+    const earlier = showOverlay && index === 0;
     const time = timeLabel(t);
     const predictionSeries = { label: `${time} · ${responseLabel}`, points, color: earlier ? '#6847a5' : '#1756aa' };
     const reference = referenceAt(run, t);
@@ -198,8 +217,7 @@ function chartLayout(run) {
   };
 }
 
-function displayView() {
-  const view = makeView(current);
+function updateViewDetails(view) {
   get('copy-status').textContent = '';
   get('copy-text').hidden = true;
   get('run-context').textContent = `${recipeName(current)} · 표시 시점 ${view.times}`;
@@ -240,15 +258,48 @@ function displayView() {
     return row;
   });
   get('depth-rows').replaceChildren(...depthRows);
+}
+
+function displayView() {
+  const view = makeView(current);
+  updateViewDetails(view);
   return Plotly.react(chart, view.series.map(profileTrace), chartLayout(current), plotConfig);
 }
 
 async function showResult(result, request) {
   const recipe = request.recipes[0];
-  current = { ...result, recipe, times: request.times, matchesGolden: matchesPreset(recipe) };
+  const next = { ...result, recipe, times: request.times, matchesGolden: matchesPreset(recipe) };
+  const view = makeView(next, result.profiles.length - 1, false);
+  const resultPanel = get('result');
+  const firstResult = resultPanel.hidden;
+  // Render beside the current chart so a failed draw cannot replace the last successful result.
+  const nextChart = document.createElement('div');
+  nextChart.className = 'profile-chart chart-staging';
+  nextChart.setAttribute('aria-hidden', 'true');
+  resultPanel.classList.toggle('chart-first-render', firstResult);
+  resultPanel.hidden = false;
+  chart.after(nextChart);
+  try {
+    await Plotly.react(nextChart, view.series.map(profileTrace), chartLayout(next), plotConfig);
+  } catch (error) {
+    Plotly.purge(nextChart);
+    nextChart.remove();
+    resultPanel.hidden = firstResult;
+    throw error;
+  } finally {
+    resultPanel.classList.remove('chart-first-render');
+  }
+  nextChart.classList.remove('chart-staging');
+  nextChart.removeAttribute('aria-hidden');
+  nextChart.setAttribute('role', 'img');
+  const previousChart = chart;
+  chart = nextChart;
+  previousChart.remove();
+  chart.id = 'chart';
+  Plotly.purge(previousChart);
+  current = next;
   activeIndex = result.profiles.length - 1;
   overlay = false;
-  get('result').hidden = false;
   profileButtons.replaceChildren(...result.profiles.map(({ t }, index) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -273,18 +324,19 @@ async function showResult(result, request) {
   get('taper').textContent = `${number.format(result.taper_deg)}°`;
   get('submitted-recipe').textContent = `${recipeName(current)} · 요청 ${timeList(current.times)}`;
   get('response-source').textContent = useDemo ? 'EtchGuard 예제 생성기 · 합성 데이터' : `서빙 API · ${result.modelVersion}`;
-  const submittedRows = prediction.fields.map(({ key, label, unit }) => {
+  const submittedRows = recipeRows(recipe).map(({ label, value, unit }) => {
     const row = document.createElement('tr');
     const heading = document.createElement('th');
     heading.scope = 'row';
     heading.textContent = label;
     row.append(heading);
-    row.insertCell().textContent = recipe[key];
-    row.insertCell().textContent = unit ?? 'ViennaPS 입력 스케일';
+    row.insertCell().textContent = value;
+    row.insertCell().textContent = unit;
     return row;
   });
   get('submitted-fields').replaceChildren(...submittedRows);
-  await displayView();
+  get('save-chart-note').hidden = true;
+  updateViewDetails(view);
 }
 
 function showRequestError(error) {
@@ -293,7 +345,6 @@ function showRequestError(error) {
 }
 
 async function runPrediction() {
-  const submit = get('submit');
   if (submit.disabled) return;
   const draft = Object.fromEntries(new FormData(form));
   let request;
@@ -310,23 +361,47 @@ async function runPrediction() {
     return;
   }
 
+  const restoreFocus = document.activeElement === submit;
   for (const control of form.elements) control.disabled = true;
   get('reset').disabled = true;
   get('analysis').setAttribute('aria-busy', 'true');
   submit.textContent = '실행 중';
-  showStatus(current ? '새 결과를 불러오는 중입니다. 아래는 이전 결과입니다.' : '단면을 불러오는 중입니다.');
+  showStatus();
+  const previousResult = current ? ' 이전 결과를 표시 중입니다.' : '';
+  showPredictionFeedback(`예측 응답을 기다리는 중입니다.${previousResult}`);
+  const startedAt = performance.now();
+  const elapsedLabel = () => {
+    const seconds = Math.floor((performance.now() - startedAt) / 1000);
+    return seconds ? `${seconds}초` : '1초 미만';
+  };
+  const updateElapsed = () => {
+    predictionElapsed.textContent = `경과 ${elapsedLabel()}`;
+  };
+  updateElapsed();
+  predictionElapsed.hidden = false;
+  const timer = window.setInterval(updateElapsed, 1_000);
+  let rendering = false;
   try {
     const predict = useDemo ? prediction.demoPredict : prediction.apiPredict;
-    const result = prediction.readResult(await predict(request));
+    const result = prediction.readResult(await predict(request), request.times);
+    rendering = true;
+    showPredictionFeedback('응답을 받아 단면을 표시하는 중입니다.');
     await showResult(result, request);
-    showStatus();
+    showPredictionFeedback(`예측 완료 · ${elapsedLabel()} 소요`);
+    submit.textContent = '단면 예측';
   } catch (error) {
-    showRequestError(error);
+    const message = rendering ? '단면을 표시하지 못했습니다. 다시 실행해 주세요.' : error.message;
+    showPredictionFeedback(`${message}${previousResult}`, 'error');
+    submit.textContent = '다시 실행';
   } finally {
+    window.clearInterval(timer);
+    predictionElapsed.hidden = true;
     for (const control of form.elements) control.disabled = false;
     get('reset').disabled = false;
     get('analysis').setAttribute('aria-busy', 'false');
-    submit.textContent = '단면 예측';
+    if (restoreFocus && document.activeElement === document.body && submit.getClientRects().length) {
+      submit.focus();
+    }
   }
 }
 
@@ -343,8 +418,10 @@ async function savePng(view) {
   await image.decode();
 
   const canvas = document.createElement('canvas');
+  const submittedRows = recipeRows(view.run.recipe);
+  const rowHeight = 24;
   canvas.width = width * 2;
-  canvas.height = (676 + view.series.length * 25) * 2;
+  canvas.height = (722 + view.series.length * 25 + submittedRows.length * rowHeight) * 2;
   const context = canvas.getContext('2d');
   context.scale(2, 2);
   context.fillStyle = '#ffffff';
@@ -373,6 +450,17 @@ async function savePng(view) {
   const origin = useDemo ? '응답 출처 EtchGuard 예제 생성기 · 합성 데이터' : `응답 출처 서빙 API · ${view.run.modelVersion}`;
   context.fillText(origin, 32, y + 26);
   if (view.shown.length) context.fillText(`기준 데이터 판본 Golden10 ${baseline.recipe} · ${baseline.revision}`, 32, y + 49);
+
+  y += view.shown.length ? 80 : 57;
+  context.font = 'bold 16px "Malgun Gothic", sans-serif';
+  context.fillText('제출 레시피 값', 32, y);
+  context.font = '14px "Malgun Gothic", sans-serif';
+  for (const { label, value, unit } of submittedRows) {
+    y += rowHeight;
+    context.fillText(label, 32, y);
+    context.fillText(value, 180, y);
+    context.fillText(unit, 400, y);
+  }
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('PNG를 만들 수 없습니다.');
@@ -439,8 +527,8 @@ referenceToggle.addEventListener('change', () => {
 });
 get('copy-run').addEventListener('click', async () => {
   const view = makeView(current);
-  const inputRows = prediction.fields.map(({ key, label, unit }) =>
-    `${label}\t${view.run.recipe[key]}\t${unit ?? 'ViennaPS 입력 스케일'}`);
+  const inputRows = recipeRows(view.run.recipe).map(({ label, value, unit }) =>
+    `${label}\t${value}\t${unit}`);
   const text = [
     `EtchGuard · ${recipeName(view.run)}`,
     `요청 시점 ${timeList(view.run.times)} · 표시 시점 ${view.times} · 좌표 단위 µm`,
