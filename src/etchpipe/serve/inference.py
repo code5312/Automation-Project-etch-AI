@@ -41,9 +41,20 @@ MAX_STEPS = 20  # configs/sim/base.yaml sim.K — 학습 데이터 상한, 그 �
 XR = (-15.0, 15.0)
 
 # model_id -> 체크포인트 경로. 카드는 artifact_sha256만 기록하므로(설계상 경로 자체는
-# 저장 안 함) 여기서 짧게 고정 매핑한다 [제안, 지금은 champion 1개뿐이라 단순하게 둠 —
-# W6-04 루프가 실제로 새 champion을 승격하기 시작하면 이 매핑도 늘어나야 함].
+# 저장 안 함) 여기서 고정 매핑 + 재학습 산출물 규칙으로 찾는다. `_ARTIFACT_PATHS`는
+# 최초 수동 등록(`scripts/register_champion.py`)분만 담고, 그 외는 `retrain/execute.py
+# ::run()`이 실제로 쓰는 경로 규칙(`runs/retrain/<model_id>/model.pt`)으로 찾는다
+# [확인, 2026-11-13 — W6-05/06 실행으로 champion이 `mgn_retrain_20261112T212130`로
+# 바뀐 뒤 이 매핑에 없어서 `/predict`가 503을 내던 걸 발견·수정].
 _ARTIFACT_PATHS = {"mgn_tuned_ep2": REPO_ROOT / "runs" / "mgn_tuned" / "model.pt"}
+_RETRAIN_RUNS_ROOT = REPO_ROOT / "runs" / "retrain"
+
+
+def _artifact_path_for(model_id: str) -> pathlib.Path | None:
+    if model_id in _ARTIFACT_PATHS:
+        return _ARTIFACT_PATHS[model_id]
+    candidate = _RETRAIN_RUNS_ROOT / model_id / "model.pt"
+    return candidate if candidate.exists() else None
 
 
 class ChampionUnavailable(RuntimeError):
@@ -61,9 +72,9 @@ def load_champion() -> dict:
     model_id = reg.current_champion()
     if model_id is None:
         raise ChampionUnavailable("레지스트리에 등록된 champion이 없습니다.")
-    if model_id not in _ARTIFACT_PATHS:
+    artifact_path = _artifact_path_for(model_id)
+    if artifact_path is None:
         raise ChampionUnavailable(f"model_id {model_id!r}의 체크포인트 경로를 모릅니다.")
-    artifact_path = _ARTIFACT_PATHS[model_id]
     if not reg.verify_artifact(model_id, artifact_path):
         raise ChampionUnavailable(f"아티팩트 무결성 검증 실패: {model_id}")
     card = reg.load_card(model_id)
