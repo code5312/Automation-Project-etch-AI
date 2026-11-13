@@ -1,0 +1,32 @@
+{
+ "timestamp": "20261112T212130",
+ "dataset_hash_final": "26a29dcca7da",
+ "promoted": true,
+ "promoted_ckpt": "/app/runs/retrain/attempt1_1794510586/model.pt",
+ "attempts": [
+  {
+   "attempt": 1,
+   "config": {
+    "attempt": 1,
+    "n_train": 40,
+    "epochs": [
+     3,
+     5
+    ],
+    "lr_mult": 1.0,
+    "regenerate": false
+   },
+   "gate_result": {
+    "passed": true,
+    "exit_code": 0,
+    "reasons": [],
+    "reference_metrics": {
+     "rollout_late_early_ratio": 1.9893788902927996,
+     "physics": {
+      "self_intersection_count": 0
+     }
+    }
+   }
+  }
+ ]
+}

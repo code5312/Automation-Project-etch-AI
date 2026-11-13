@@ -1,0 +1,37 @@
+{
+  "dataset_hash": "26a29dcca7da",
+  "before": {
+    "checkpoint": "/app/runs/mgn_tuned/model.pt",
+    "checkpoint_note": "epoch=2, processor_size=6, hidden_dim_processor=128",
+    "n_eval": 20,
+    "chamfer_mean": 0.5354933130432534,
+    "chamfer_median": 0.5298817596734656,
+    "depth_error": {
+      "mean_pct_error": 7.053372449022863,
+      "mean_abs_error": 0.0,
+      "n_large": 20,
+      "n_small": 0
+    },
+    "depth_dimension_ok": false,
+    "rollout_late_early_ratio": 1.5587356055434816,
+    "rollout_ratio_ok": true,
+    "self_intersection_count": 0
+  },
+  "after": {
+    "checkpoint": "/app/runs/retrain/mgn_retrain_20261112T212130/model.pt",
+    "checkpoint_note": "epoch=2, processor_size=6, hidden_dim_processor=128",
+    "n_eval": 20,
+    "chamfer_mean": 0.497874475334664,
+    "chamfer_median": 0.4659083023048953,
+    "depth_error": {
+      "mean_pct_error": 4.951918328054116,
+      "mean_abs_error": 0.0,
+      "n_large": 20,
+      "n_small": 0
+    },
+    "depth_dimension_ok": true,
+    "rollout_late_early_ratio": 1.9893788902927996,
+    "rollout_ratio_ok": true,
+    "self_intersection_count": 0
+  }
+}

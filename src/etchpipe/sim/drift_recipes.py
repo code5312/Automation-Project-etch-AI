@@ -10,14 +10,22 @@ SEED = 9100
 PREFIX = "drift"
 
 
-def drift_splits() -> tuple[dict[str, list[str]], dict[str, dict]]:
-    """train 40 / val 10 / golden_drift 10 — 한 번의 Sobol 추출을 순서대로 자른다
-    (sampling.make_splits과 같은 패턴)."""
-    recipes = make_recipes(N_TRAIN + N_VAL + N_GOLDEN_DRIFT, seed=SEED, prefix=PREFIX)
+def drift_splits(
+    n_train: int = N_TRAIN,
+    n_val: int = N_VAL,
+    n_golden_drift: int = N_GOLDEN_DRIFT,
+    seed: int = SEED,
+    prefix: str = PREFIX,
+) -> tuple[dict[str, list[str]], dict[str, dict]]:
+    """train/val/golden_drift(기본 40/10/10) — 한 번의 Sobol 추출을 순서대로 자른다
+    (sampling.make_splits과 같은 패턴). 인자 없이 호출하면 W6-03/04 실제 운영 경로와
+    동일(변경 없음) — W6-07 `retrain-demo`가 작은 값(예: 2/1/1)으로 재사용한다[확인,
+    2026-11-13, 기본값은 그대로 유지해 실제 실행에 영향 없음]."""
+    recipes = make_recipes(n_train + n_val + n_golden_drift, seed=seed, prefix=prefix)
     splits = {
-        "train": [r["run_id"] for r in recipes[:N_TRAIN]],
-        "val": [r["run_id"] for r in recipes[N_TRAIN : N_TRAIN + N_VAL]],
-        "golden_drift": [r["run_id"] for r in recipes[N_TRAIN + N_VAL :]],
+        "train": [r["run_id"] for r in recipes[:n_train]],
+        "val": [r["run_id"] for r in recipes[n_train : n_train + n_val]],
+        "golden_drift": [r["run_id"] for r in recipes[n_train + n_val :]],
     }
     params_by_id = {r["run_id"]: r["params"] for r in recipes}
     return splits, params_by_id
