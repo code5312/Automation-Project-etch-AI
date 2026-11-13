@@ -496,10 +496,41 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   컴포넌트 표, 디렉터리 구조, CI job 표)이 1~2주차 수준에서 멈춰 있어 C3~C9 실제
   구현 상태를 전혀 반영 못 하고 있었음 — README 전면 재작성(`/github-readme-maker`
   형식)으로 해결. 증거: `reports/evidence/W7-02_clean_env_reproduction.md`.
-- [ ] W7-03 실패 시나리오 테스트: 시뮬레이션 실패, 데이터 손상, 모델 로드 실패, 게이트 오탐/미탐
-- [ ] W7-04 보안: 의존성 취약점 스캔, 시크릿 스캔, `torch.load` `weights_only` 적용 확인, 커밋 이력에 데이터·키 없음 확인
-- [ ] W7-05 전체 테스트·커버리지 실행, 깨진 테스트 0
-- [ ] W7-06 금지 표현 검사 통과(코드·README·대시보드·모델 카드), 정의서 6장 기준 → FR-18
+- [x] W7-03 실패 시나리오 테스트: 시뮬레이션 실패, 데이터 손상, 모델 로드 실패, 게이트 오탐/미탐
+  — **완료(2026-11-14)**: 모델 로드 실패(레지스트리 레이어 직접 테스트 4건, 기존
+  로직 양호). 데이터 손상(`etl.validate_run`이 자체 docstring 약속과 다르게
+  `meta.json` 없음/손상된 `.vtp`에서 크래시하던 버그 2건 발견·수정). 시뮬레이션
+  실패(`run_sim`은 의도적으로 예외를 안 삼킴 확인, 실패 시 디스크 상태를 실제
+  ViennaPS로 검증 — `etch-sim:0.1`). 게이트 오탐(실제 사례 1건 확인: golden-10
+  소표본에서 정상 모델 80% BLOCK, W5-06 재검증과 동일 건)/미탐(W5-06에서 기검증).
+  검증: 로컬 129 passed, `etch-train:0.1` 전체 215 passed, `etch-sim:0.1` 2 passed
+  — 전부 회귀 없음. 증거: `reports/evidence/W7-03_failure_scenarios.md`.
+- [x] W7-04 보안: 의존성 취약점 스캔, 시크릿 스캔, `torch.load` `weights_only` 적용 확인, 커밋 이력에 데이터·키 없음 확인
+  — **완료(2026-11-14)**: `pip-audit`로 `etch-train:0.1`/`etch-serve:0.1`에서 실제
+  CVE 15건(pip 24.0, setuptools 79.0.1, base 이미지 유래) 발견 — Dockerfile에 업그레이드
+  레이어 추가 후 재빌드·재스캔해 해소(회귀 없음, 215/34 passed). `detect-secrets`
+  신규 4건은 전부 `params_hash` 오탐으로 확인·audit 처리. **`torch.load` 보안 버그
+  발견·수정**: `eval.py::load_model_a`(서빙이 실제 champion 로드에 쓰는 함수)와
+  `run_rollout_comparison.py`가 `weights_only=False`였음 — `weights_only=True` +
+  필요한 numpy 타입만 명시 허용(`add_safe_globals`)으로 변경, 실제 체크포인트 2종으로
+  로드 성공 확인. 커밋 이력(85개) 전수 확인: `data/`·키 파일 커밋 이력 0건. 증거:
+  `reports/evidence/W7-04_security_review.md`.
+- [x] W7-05 전체 테스트·커버리지 실행, 깨진 테스트 0
+  — **완료(2026-11-14)**: 환경 3분리 때문에 `etch-train:0.1`(218 passed) +
+  `etch-serve:0.1`(36 passed)로 나눠 돌리고 `coverage combine`으로 합산 —
+  **254 passed, 0 failed**. 전체 커버리지 **80.8%**(1752줄 중 336줄 미실행).
+  `retrain/execute.py`가 0%였던 걸 발견(실제 드리프트 데이터 의존이라 원래
+  pytest보다 실제 실행 증거로 검증해 온 모듈) — torch 없이 되는 부분만
+  `tests/unit/test_execute.py`(신규)로 보강해 28.4%로 개선(`dataset_hash`
+  회귀 테스트 포함). 증거: `reports/evidence/W7-05_test_coverage.md`.
+- [x] W7-06 금지 표현 검사 통과(코드·README·대시보드·모델 카드), 정의서 6장 기준 → FR-18 —
+  기존 검사(`src/scripts/tests/README.md`) 재확인 통과. 공백 발견: `docs/` 전체 제외
+  규칙이 체크리스트가 명시한 "모델 카드"류 실제 문서(`docs/data_card.md`)까지 같이
+  빼고 있었음 — `docs/*.md` 전체 grep으로 5개 금지 표현 전수 확인, 나머지(정의서 자기
+  인용·일반 단어 용법)는 오탐으로 triage하고 `data_card.md`(0건, 깨끗함)만
+  `SCAN_FILES`에 추가. `docs/model_card.md`는 아직 없음(W8-03 생성 예정, 생성 시 추가
+  필요). 재검사 통과 + 신규 테스트(`test_docs_data_card_is_scanned`) 5 passed. 증거:
+  `reports/evidence/W7-06_forbidden_expressions.md`.
 - [ ] W7-07 전체 파이프라인 단계별 실행 시간 측정, 병목 1개 개선
 - [ ] W7-08 문서·코드 불일치 목록 정리 후 문서 수정
 

@@ -247,6 +247,17 @@ def test_check_no_regression_passes_when_candidate_matches_champion() -> None:
     assert detail["hd95_ok"] is True
 
 
+def test_check_no_regression_does_not_false_block_a_better_candidate() -> None:
+    # W7-03 "게이트 오탐" 방지 확인: 후보가 챔피언보다 일관되게 더 나을 때도
+    # 윌콕슨 검정은 "candidate < champion" 방향만 보므로(단측) 차단하면 안 된다.
+    champion_iou = [0.80, 0.79, 0.81, 0.78, 0.80, 0.82, 0.79, 0.81, 0.80, 0.78]
+    candidate_iou = [0.95, 0.94, 0.96, 0.93, 0.95, 0.97, 0.94, 0.96, 0.95, 0.93]
+    hd95_vals = [0.2] * 10
+    ok, detail = check_no_regression(candidate_iou, champion_iou, hd95_vals, hd95_vals)
+    assert ok is True
+    assert detail["iou_not_regressed"] is True
+
+
 def test_check_no_regression_blocks_on_significantly_worse_iou() -> None:
     # 후보가 모든 레시피에서 일관되게 더 나쁨(윌콕슨이 유의하다고 판단할 만큼)
     champion_iou = [0.95, 0.94, 0.96, 0.93, 0.95, 0.97, 0.94, 0.96, 0.95, 0.93]

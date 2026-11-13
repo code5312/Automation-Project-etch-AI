@@ -29,6 +29,12 @@ from etchpipe.train.rollout import rollout_val_error
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_CKPT = ROOT / "runs" / "mgn_draft" / "ckpt_mgn.pt"
 
+# W7-04(보안): eval.py::load_model_a와 동일 — weights_only=True + 필요한 numpy 타입만
+# 명시 허용(기본 False는 임의 코드 실행 가능한 일반 pickle).
+torch.serialization.add_safe_globals(
+    [np._core.multiarray._reconstruct, np.ndarray, np.dtype, np.dtypes.Float32DType]
+)
+
 
 def _agg(vals: list[float]) -> dict:
     return {"mean": float(np.mean(vals)), "median": float(np.median(vals))}
@@ -40,7 +46,7 @@ def _load_model_a(ckpt_path: pathlib.Path) -> tuple[MeshGraphNetModel, str]:
     node_block을 번갈아 쌓으므로 processor_layers 개수 = 2*processor_size
     (2026-11-09, load_state_dict 실패로 발견·정정 — 레이어 개수를 그대로 processor_size로
     착각했던 첫 시도는 틀렸음)."""
-    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
     sd = ckpt["state_dict"]
     # train_main.py(W4-04)로 직접 학습한 체크포인트는 MeshGraphNetModel 래퍼 전체를
     # model.state_dict()로 저장해서 키 앞에 "net."이 붙는다(팀원 원본 체크포인트는 접두사

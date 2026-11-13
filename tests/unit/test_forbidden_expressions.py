@@ -45,3 +45,13 @@ def test_docs_dir_is_not_scanned(tmp_path: Path) -> None:
         "금지 표현: 대체한다, 실시간\n", encoding="utf-8"
     )
     assert _mod.find_violations(tmp_path) == []
+
+
+def test_docs_data_card_is_scanned(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "data_card.md").write_text(
+        "이 데이터는 실제 fab 데이터이다\n", encoding="utf-8"
+    )
+    violations = _mod.find_violations(tmp_path)
+    assert len(violations) == 1
+    assert violations[0][2] == "실제 fab 데이터"

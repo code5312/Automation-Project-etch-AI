@@ -18,9 +18,13 @@ FORBIDDEN = [
 ]
 
 # 금지 표현 규칙(CLAUDE.md)의 적용 범위: 코드·README·대시보드·모델 카드.
-# docs/의 설계 문서와 CLAUDE.md 자신은 금지 표현을 "정의"하므로 검사 대상에서 뺀다.
+# docs/의 설계 문서(project-definition.md/project-design.md/adr/*)와 CLAUDE.md 자신은
+# 금지 표현을 "정의"하거나 무관한 맥락(예: "실시간", "~을 대체한다"의 일반 단어 용법)으로
+# 포함하므로 검사 대상에서 뺀다. 체크리스트(W7-06)가 명시한 "모델 카드"는 데이터 카드와
+# 같은 종류의 실제 문서이므로 개별 추가한다.
+# docs/model_card.md는 W8-03에 생성되는 즉시 이 목록에 추가한다(아직 파일 없음, 2026-11-14 확인).
 SCAN_DIRS = ["src", "scripts", "tests"]
-SCAN_FILES = ["README.md"]
+SCAN_FILES = ["README.md", "docs/data_card.md"]
 
 # 이 검사 스크립트와 그 테스트는 금지 표현을 문자열 리터럴로 포함하므로 자기 자신은 제외한다.
 SELF_EXCLUDE = {
