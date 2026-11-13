@@ -3,7 +3,7 @@
 `mgn_retrain_20261112T212130`(재학습 산출물)로 바뀌면서 실제로 `/predict`가 503을
 내던 버그의 회귀 테스트 — torch/physicsnemo는 안 쓴다(이 함수는 경로 계산만)."""
 
-from etchpipe.serve.inference import _artifact_path_for, _ARTIFACT_PATHS
+from etchpipe.serve.inference import _ARTIFACT_PATHS, _artifact_path_for
 
 
 def test_legacy_model_id_uses_fixed_mapping() -> None:
