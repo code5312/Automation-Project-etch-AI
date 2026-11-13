@@ -523,7 +523,14 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   pytest보다 실제 실행 증거로 검증해 온 모듈) — torch 없이 되는 부분만
   `tests/unit/test_execute.py`(신규)로 보강해 28.4%로 개선(`dataset_hash`
   회귀 테스트 포함). 증거: `reports/evidence/W7-05_test_coverage.md`.
-- [ ] W7-06 금지 표현 검사 통과(코드·README·대시보드·모델 카드), 정의서 6장 기준 → FR-18
+- [x] W7-06 금지 표현 검사 통과(코드·README·대시보드·모델 카드), 정의서 6장 기준 → FR-18 —
+  기존 검사(`src/scripts/tests/README.md`) 재확인 통과. 공백 발견: `docs/` 전체 제외
+  규칙이 체크리스트가 명시한 "모델 카드"류 실제 문서(`docs/data_card.md`)까지 같이
+  빼고 있었음 — `docs/*.md` 전체 grep으로 5개 금지 표현 전수 확인, 나머지(정의서 자기
+  인용·일반 단어 용법)는 오탐으로 triage하고 `data_card.md`(0건, 깨끗함)만
+  `SCAN_FILES`에 추가. `docs/model_card.md`는 아직 없음(W8-03 생성 예정, 생성 시 추가
+  필요). 재검사 통과 + 신규 테스트(`test_docs_data_card_is_scanned`) 5 passed. 증거:
+  `reports/evidence/W7-06_forbidden_expressions.md`.
 - [ ] W7-07 전체 파이프라인 단계별 실행 시간 측정, 병목 1개 개선
 - [ ] W7-08 문서·코드 불일치 목록 정리 후 문서 수정
 
