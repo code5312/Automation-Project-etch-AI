@@ -486,7 +486,16 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   세 공개 엔드포인트 신설, `StaticFiles`로 대시보드 정적 파일도 같은 포트에서 서빙.
   PR #4~#7(backend-security·frontend) 머지로 `main`에 전부 반영, CI 전부 SUCCESS.
   Plotly.js는 `vendor/plotly-4.1.1.min.js`로 기존에 포함.
-- [ ] W7-02 **클린 환경 재현**: 새 clone + 새 컨테이너에서 README만 따라 스모크 파이프라인 실행, 막힌 곳 전부 기록·수정 → FR-17
+- [x] W7-02 **클린 환경 재현**: 새 clone + 새 컨테이너에서 README만 따라 스모크 파이프라인 실행, 막힌 곳 전부 기록·수정 → FR-17
+  — **완료(2026-11-14)**: 별도 디렉터리에 새 `git clone` + 새 venv로 README Quick
+  Start/Install/Testing을 그대로 실행. `run_pipeline_smoke.py`/`ruff check .`/
+  `check_forbidden_expressions.py`는 통과했지만, `run_gate_negative.py`(dev 환경에서
+  `ModuleNotFoundError: torch`), `pytest --ignore=test_baseline.py`(실제론 torch 필요
+  파일 8개, 7개 더 누락), `shapely` 트러블슈팅 항목(이미 해결된 문제를 설명) 3가지가
+  README 기준으로는 실패/오해를 유발함을 실측 확인. 더 크게는 README 본문(Overview
+  컴포넌트 표, 디렉터리 구조, CI job 표)이 1~2주차 수준에서 멈춰 있어 C3~C9 실제
+  구현 상태를 전혀 반영 못 하고 있었음 — README 전면 재작성(`/github-readme-maker`
+  형식)으로 해결. 증거: `reports/evidence/W7-02_clean_env_reproduction.md`.
 - [ ] W7-03 실패 시나리오 테스트: 시뮬레이션 실패, 데이터 손상, 모델 로드 실패, 게이트 오탐/미탐
 - [ ] W7-04 보안: 의존성 취약점 스캔, 시크릿 스캔, `torch.load` `weights_only` 적용 확인, 커밋 이력에 데이터·키 없음 확인
 - [ ] W7-05 전체 테스트·커버리지 실행, 깨진 테스트 0
