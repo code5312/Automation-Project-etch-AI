@@ -23,5 +23,12 @@ RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 
 # detect-secrets/httpx/fastapi 등 이 이미지와 무관한 나머지는 설치하지 않는다.
 RUN pip install --no-cache-dir ruff==0.17.3 pytest==9.1.1
 
+# git(2026-11-13 추가): test_run_train.py가 git_sha 기록을 위해 `git rev-parse` 등을
+# 서브프로세스로 호출하는데 이 이미지엔 원래 git이 없었음(실제 pytest 실행으로 발견) —
+# 맨 뒤에 별도 RUN으로 둬서 위 torch/physicsnemo/torch_scatter 캐시를 안 깨도록 함.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 ENV PYTHONPATH=/app/src

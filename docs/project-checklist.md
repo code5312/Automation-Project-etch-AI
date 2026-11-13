@@ -17,7 +17,7 @@
 | 증거 | 합격 기준 | 위치 | 주차 | 상태 |
 |---|---|---|---|---|
 | ① 게이트 차단 | 정상 통과, 노이즈·1에폭 모델 차단, 해시·골든 변조 차단(코드 2) | `reports/evidence/` + CI `gate-negative` 로그 | 2(더미), 5(실모델) | [x] W5-09 |
-| ② 재학습 완주 | 모니터→생성→변환→학습→게이트→승격, 무개입 **자동 반복(최대 4회, ADR-0002)** 포함 완주, 전/후 오차 | `reports/evidence/retrain_*.json` | 6 | [ ] W6-05/06 미착수(오케스트레이션 코드만 있음) |
+| ② 재학습 완주 | 모니터→생성→변환→학습→게이트→승격, 무개입 **자동 반복(최대 4회, ADR-0002)** 포함 완주, 전/후 오차 | `reports/evidence/retrain_*.json` | 6 | [x] W6-05/06 |
 
 ---
 
@@ -352,14 +352,19 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   **트리거 안 됨**(`Substrate.A_ie`×1.15 드리프트를 champion이 재학습 없이 버팀) — 증거:
   `reports/evidence/W6-02_drift_monitor.md`. **주의**: 이 결과대로면 W6-03/04의 "자동
   반복 루프"를 자연 발생으로 시연할 수 없음 — 진행 방식 사용자 확인 필요(아래).
-- [~] W6-03 드리프트 데이터 60개 생성(train 40 / val 10 / golden_drift 10) → ETL → 새 `dataset_hash` — 루프 1차 시도의 입력
+- [x] W6-03 드리프트 데이터 60개 생성(train 40 / val 10 / golden_drift 10) → ETL → 새 `dataset_hash` — 루프 1차 시도의 입력
   — **코드 완료, 실행 보류(2026-11-12 사용자 결정)**: `src/etchpipe/sim/drift_recipes.py`
   (Sobol 분할, viennaps 비의존) + `scripts/run_drift_data_gen.py`(`etch-sim:0.1`, 시뮬레이션)
   + `scripts/process_drift_data.py`(`etch-train:0.1`, `etl.process_dataset` 재사용 →
   dataset_hash). 실제 60개 시뮬레이션(2~6시간 추정)은 W6-04 증거②와 함께 나중에 수동
   트리거하기로 함 — W6-02에서 이 드리프트 강도(×1.15)로는 루프가 자연 트리거되지 않음을
   확인했기 때문(`reports/evidence/W6-02_drift_monitor.md`).
-- [~] W6-04 **자동 반복 루프 구현(최대 4회, ADR-0002)**: 1차 champion에서 3~5에폭 미세조정 → 게이트. BLOCK이면 2차(드리프트 train 40→100개 자동 확장 재생성, ViennaPS 추가 호출) → 게이트. BLOCK이면 3차(에폭 10~15) → 4차(학습률 조정) 순서로 자동 진행. 어느 시도든 PASS면 즉시 승격하고 루프 종료, 4회 모두 BLOCK이면 champion 유지 + 알림. 시도마다 게이트 결과 기록
+  **완료(2026-11-13, 사용자 결정 "CPU로 직접 돌려줘")**: `scripts/run_drift_data_gen.py`
+  실제 실행(`etch-sim:0.1`, 백그라운드, 레시피당 평균 약 10분 — 8~47분 실측 범위 안,
+  총 약 10시간) — 60/60개 `meta.json` 완전성 확인(`drift_splits()` 기대 ID 목록과 대조,
+  누락·손상 0건), `splits` 크기 train40/val10/golden_drift10 확인. ETL은 W6-04의
+  `DriftState`가 실행 시점에 같이 수행(`dataset_hash=26a29dcca7da`).
+- [x] W6-04 **자동 반복 루프 구현(최대 4회, ADR-0002)**: 1차 champion에서 3~5에폭 미세조정 → 게이트. BLOCK이면 2차(드리프트 train 40→100개 자동 확장 재생성, ViennaPS 추가 호출) → 게이트. BLOCK이면 3차(에폭 10~15) → 4차(학습률 조정) 순서로 자동 진행. 어느 시도든 PASS면 즉시 승격하고 루프 종료, 4회 모두 BLOCK이면 champion 유지 + 알림. 시도마다 게이트 결과 기록
   — **[CPU/매핑]** 루프 오케스트레이션 코드(시도 순서·게이트 호출·기록)는 CPU에서 구현 가능.
   **[GPU 팀원]** 실제 미세조정(에폭 실행) 자체는 GPU에서 수행.
   — **오케스트레이션 코드 완료(2026-11-12)**: `src/etchpipe/retrain/loop.py::run_retrain_loop`
@@ -368,8 +373,26 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   6종(1차 통과 즉시 종료/점진 에스컬레이션/4회 전부 BLOCK/2차에서만 regenerate 호출/
   ADR-0002 설정값 일치/max_attempts). **실제 실행(실제 미세조정+게이트, 증거②)은
   W6-03 데이터와 함께 나중에 수동 트리거** — 사용자 결정.
-- [ ] W6-05 `python -m etchpipe.retrain run` 단일 명령으로 전 과정(에스컬레이션 루프 포함) 무개입 실행, `reports/evidence/retrain_<ts>.json`에 `attempts: [{attempt, config, gate_result}, ...]` 기록
-- [ ] W6-06 **증거 ② 제출본**: 승격까지 완주한 실행 1회 이상(자동 반복 과정 포함) + 재학습 전/후 오차 표 + 시도별 로그. 4회 모두 BLOCK이면 그 자체를 결과로 기록(사람이 사후 원인 분석, 이번 루프의 무개입 완주 정의는 깨지 않음)
+  **실제 실행 완료(2026-11-13)**: 실제 콜백(`fine_tune_fn`/`gate_fn`/`regenerate_fn`)을
+  `src/etchpipe/retrain/execute.py`에 작성 — `train/loop.py`의 `train_one_epoch`,
+  `eval.py`의 `load_model_a`, `gate.py`의 `run_gate`를 그대로 재사용. CPU 미세조정 속도상
+  ADR-0002 `epochs` 범위의 **하한**을 씀([제안]). `etch-serve:0.1`(torch+physicsnemo+
+  ViennaPS 전부 있는 서빙 이미지 재사용, 2차 시도 `regenerate_fn`이 ViennaPS도 필요해서)
+  에서 `python -m etchpipe.retrain run` 실제 실행 — **1차 시도에서 즉시 PASS**(3에폭,
+  lr_mult=1.0, 재생성 없음 — 2~4차 에스컬레이션 불필요)해 루프 종료. 증거:
+  `reports/evidence/retrain_20261112T212130.json`.
+- [x] W6-05 `python -m etchpipe.retrain run` 단일 명령으로 전 과정(에스컬레이션 루프 포함) 무개입 실행, `reports/evidence/retrain_<ts>.json`에 `attempts: [{attempt, config, gate_result}, ...]` 기록
+  — **완료(2026-11-13)**: `src/etchpipe/retrain/__main__.py` CLI로 실제 1회 무개입 실행
+  (사람 개입 없이 ETL→미세조정→게이트→승격까지 자동 완주). `reports/evidence/
+  retrain_20261112T212130.json`에 `attempts` 기록됨(1건, PASS로 종료).
+- [x] W6-06 **증거 ② 제출본**: 승격까지 완주한 실행 1회 이상(자동 반복 과정 포함) + 재학습 전/후 오차 표 + 시도별 로그. 4회 모두 BLOCK이면 그 자체를 결과로 기록(사람이 사후 원인 분석, 이번 루프의 무개입 완주 정의는 깨지 않음)
+  — **완료(2026-11-13)**: `reports/evidence/W6-06_retrain_evidence.md`로 정리 — 1차 시도
+  즉시 PASS·레지스트리 승격(`registry/current`가 `mgn_tuned_ep2`→`mgn_retrain_20261112T212130`
+  로 실제 교체됨) 확인. 재학습 전/후 오차 비교는 `scripts/compare_retrain_before_after.py`
+  (신규)로 같은 드리프트 평가셋(golden_drift+val 20개)에서 재학습 전/후 체크포인트를
+  독립적으로 재평가해 작성(`gate.py`의 `reference_metrics`는 ②(깊이/CD)가 통과하면
+  수치를 안 남기는 설계라 별도 스크립트로 복원) — 수치는 `reports/evidence/
+  W6-06_retrain_before_after.json` 참고.
 - [ ] W6-07 `retrain-demo` 수동 워크플로(소규모 설정)
 
 ### ② 서빙 (다음)
