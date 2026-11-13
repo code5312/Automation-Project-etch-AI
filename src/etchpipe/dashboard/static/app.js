@@ -11,8 +11,11 @@ const number = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 });
 const presetTimes = [2, 5];
 const selectedTimes = new Set(presetTimes);
 const baseline = { recipe: 'r0007', version: '4.5.0', revision: 'f5ee15a' };
-// The preview uses fixtures. Enable the API path after the team proxy is ready.
-const useDemo = true;
+// W7-01(2026-11-13): 백엔드 `/api/predict`(serve/app.py) 공개 프록시가 준비돼
+// 실제 API 경로를 켠다. 서버가 응답 못 하면(503/404 등) apiPredict()가 에러를
+// 던지고 화면 상단 상태 메시지로 표시된다(합성 데이터로 자동 대체하지 않음 —
+// "API만 호출" 요건, [확인]).
+const useDemo = false;
 const responseLabel = useDemo ? '예제 응답 · 합성' : '모델 예측 응답';
 const plotConfig = { responsive: true, displayModeBar: false, displaylogo: false };
 let current;
