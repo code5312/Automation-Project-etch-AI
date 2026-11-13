@@ -515,7 +515,14 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   필요한 numpy 타입만 명시 허용(`add_safe_globals`)으로 변경, 실제 체크포인트 2종으로
   로드 성공 확인. 커밋 이력(85개) 전수 확인: `data/`·키 파일 커밋 이력 0건. 증거:
   `reports/evidence/W7-04_security_review.md`.
-- [ ] W7-05 전체 테스트·커버리지 실행, 깨진 테스트 0
+- [x] W7-05 전체 테스트·커버리지 실행, 깨진 테스트 0
+  — **완료(2026-11-14)**: 환경 3분리 때문에 `etch-train:0.1`(218 passed) +
+  `etch-serve:0.1`(36 passed)로 나눠 돌리고 `coverage combine`으로 합산 —
+  **254 passed, 0 failed**. 전체 커버리지 **80.8%**(1752줄 중 336줄 미실행).
+  `retrain/execute.py`가 0%였던 걸 발견(실제 드리프트 데이터 의존이라 원래
+  pytest보다 실제 실행 증거로 검증해 온 모듈) — torch 없이 되는 부분만
+  `tests/unit/test_execute.py`(신규)로 보강해 28.4%로 개선(`dataset_hash`
+  회귀 테스트 포함). 증거: `reports/evidence/W7-05_test_coverage.md`.
 - [ ] W7-06 금지 표현 검사 통과(코드·README·대시보드·모델 카드), 정의서 6장 기준 → FR-18
 - [ ] W7-07 전체 파이프라인 단계별 실행 시간 측정, 병목 1개 개선
 - [ ] W7-08 문서·코드 불일치 목록 정리 후 문서 수정

@@ -42,6 +42,11 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+# 커버리지 산출물(W7-05) — 컨테이너별로 생기는 기계 생성 바이너리라 커밋 대상 아님.
+# .coveragerc(경로 매핑 설정)는 이 블록에 안 걸림(이름이 다름, 의도적으로 추적함).
+.coverage
+.coverage.*
+htmlcov/
 
 # 시크릿/환경변수
 .env

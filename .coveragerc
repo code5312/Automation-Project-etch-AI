@@ -1,0 +1,11 @@
+[run]
+source = etchpipe
+
+[paths]
+source =
+    src/etchpipe
+    /app/src/etchpipe
+    \app\src\etchpipe
+
+[report]
+precision = 1
