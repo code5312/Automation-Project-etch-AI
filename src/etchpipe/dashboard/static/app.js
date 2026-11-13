@@ -84,6 +84,12 @@ function showPredictionFeedback(message = '', tone = '') {
   predictionFeedback.classList.toggle('error', tone === 'error');
 }
 
+function recipeRows(recipe) {
+  return prediction.fields.map(({ key, label, unit }) => ({
+    label, value: String(recipe[key]), unit: unit ?? 'ViennaPS 입력 스케일',
+  }));
+}
+
 function markEdited() {
   submit.textContent = '단면 예측';
   showPredictionFeedback();
@@ -93,6 +99,7 @@ function markEdited() {
     prediction.fields.some(({ key }) => current.recipe[key] !== Number(draft[key])) ||
     current.times.join(',') !== sortedTimes().join(',')
   );
+  get('save-chart-note').hidden = !stale;
   showStatus(stale ? '이전 입력으로 실행한 결과입니다. 바꾼 조건으로 보려면 단면 예측을 누르세요.' : '', 'warning');
 }
 
@@ -317,17 +324,18 @@ async function showResult(result, request) {
   get('taper').textContent = `${number.format(result.taper_deg)}°`;
   get('submitted-recipe').textContent = `${recipeName(current)} · 요청 ${timeList(current.times)}`;
   get('response-source').textContent = useDemo ? 'EtchGuard 예제 생성기 · 합성 데이터' : `서빙 API · ${result.modelVersion}`;
-  const submittedRows = prediction.fields.map(({ key, label, unit }) => {
+  const submittedRows = recipeRows(recipe).map(({ label, value, unit }) => {
     const row = document.createElement('tr');
     const heading = document.createElement('th');
     heading.scope = 'row';
     heading.textContent = label;
     row.append(heading);
-    row.insertCell().textContent = recipe[key];
-    row.insertCell().textContent = unit ?? 'ViennaPS 입력 스케일';
+    row.insertCell().textContent = value;
+    row.insertCell().textContent = unit;
     return row;
   });
   get('submitted-fields').replaceChildren(...submittedRows);
+  get('save-chart-note').hidden = true;
   updateViewDetails(view);
 }
 
@@ -362,9 +370,12 @@ async function runPrediction() {
   const previousResult = current ? ' 이전 결과를 표시 중입니다.' : '';
   showPredictionFeedback(`예측 응답을 기다리는 중입니다.${previousResult}`);
   const startedAt = performance.now();
-  const elapsedSeconds = () => Math.floor((performance.now() - startedAt) / 1000);
+  const elapsedLabel = () => {
+    const seconds = Math.floor((performance.now() - startedAt) / 1000);
+    return seconds ? `${seconds}초` : '1초 미만';
+  };
   const updateElapsed = () => {
-    predictionElapsed.textContent = `경과 ${elapsedSeconds()}초`;
+    predictionElapsed.textContent = `경과 ${elapsedLabel()}`;
   };
   updateElapsed();
   predictionElapsed.hidden = false;
@@ -376,7 +387,7 @@ async function runPrediction() {
     rendering = true;
     showPredictionFeedback('응답을 받아 단면을 표시하는 중입니다.');
     await showResult(result, request);
-    showPredictionFeedback(`예측 완료 · ${elapsedSeconds()}초 소요`);
+    showPredictionFeedback(`예측 완료 · ${elapsedLabel()} 소요`);
     submit.textContent = '단면 예측';
   } catch (error) {
     const message = rendering ? '단면을 표시하지 못했습니다. 다시 실행해 주세요.' : error.message;
@@ -407,8 +418,10 @@ async function savePng(view) {
   await image.decode();
 
   const canvas = document.createElement('canvas');
+  const submittedRows = recipeRows(view.run.recipe);
+  const rowHeight = 24;
   canvas.width = width * 2;
-  canvas.height = (676 + view.series.length * 25) * 2;
+  canvas.height = (722 + view.series.length * 25 + submittedRows.length * rowHeight) * 2;
   const context = canvas.getContext('2d');
   context.scale(2, 2);
   context.fillStyle = '#ffffff';
@@ -437,6 +450,17 @@ async function savePng(view) {
   const origin = useDemo ? '응답 출처 EtchGuard 예제 생성기 · 합성 데이터' : `응답 출처 서빙 API · ${view.run.modelVersion}`;
   context.fillText(origin, 32, y + 26);
   if (view.shown.length) context.fillText(`기준 데이터 판본 Golden10 ${baseline.recipe} · ${baseline.revision}`, 32, y + 49);
+
+  y += view.shown.length ? 80 : 57;
+  context.font = 'bold 16px "Malgun Gothic", sans-serif';
+  context.fillText('제출 레시피 값', 32, y);
+  context.font = '14px "Malgun Gothic", sans-serif';
+  for (const { label, value, unit } of submittedRows) {
+    y += rowHeight;
+    context.fillText(label, 32, y);
+    context.fillText(value, 180, y);
+    context.fillText(unit, 400, y);
+  }
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('PNG를 만들 수 없습니다.');
@@ -503,8 +527,8 @@ referenceToggle.addEventListener('change', () => {
 });
 get('copy-run').addEventListener('click', async () => {
   const view = makeView(current);
-  const inputRows = prediction.fields.map(({ key, label, unit }) =>
-    `${label}\t${view.run.recipe[key]}\t${unit ?? 'ViennaPS 입력 스케일'}`);
+  const inputRows = recipeRows(view.run.recipe).map(({ label, value, unit }) =>
+    `${label}\t${value}\t${unit}`);
   const text = [
     `EtchGuard · ${recipeName(view.run)}`,
     `요청 시점 ${timeList(view.run.times)} · 표시 시점 ${view.times} · 좌표 단위 µm`,

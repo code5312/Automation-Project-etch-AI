@@ -78,7 +78,10 @@
                 <h2 id="chart-title">단면 비교</h2>
                 <p id="run-context" class="run-context" role="status"></p>
               </div>
-              <button type="button" id="save-chart" class="secondary"><span aria-hidden="true">↓</span> PNG 저장</button>
+              <div class="plot-export">
+                <button type="button" id="save-chart" class="secondary" aria-describedby="save-chart-note"><span aria-hidden="true">↓</span> PNG 저장</button>
+                <p id="save-chart-note" class="help" hidden>이전 제출 조건으로 저장합니다.</p>
+              </div>
             </div>
             <div class="plot-toolbar">
               <div class="choices" id="profiles" role="group" aria-label="표시할 단면 시간"></div>
@@ -145,9 +148,10 @@
     <section data-view-section="compare" hidden>
       <div class="page-title">
         <h1>모델 비교</h1>
-        <p>같은 test 분할·같은 지표(Chamfer/깊이오차)로 모델 A(MeshGraphNet)와 모델 B(FNO)를 비교합니다.</p>
+        <p>평가 보고서에 기록된 MGN과 FNO의 Chamfer 거리와 깊이오차를 비교합니다.</p>
       </div>
       <p id="compare-status" class="message" role="status" hidden></p>
+      <button type="button" id="compare-retry" class="secondary" hidden>비교 결과 다시 불러오기</button>
       <div id="compare-result" hidden>
         <section class="panel" aria-labelledby="compare-chart-title">
           <div class="panel-header">
@@ -169,10 +173,21 @@
           </div>
           <div class="panel-body">
             <table class="data-table compare-table">
-              <thead><tr><th scope="col">모델</th><th scope="col">Chamfer 평균</th><th scope="col">깊이오차 평균</th></tr></thead>
+              <thead><tr><th scope="col">모델</th><th scope="col">Chamfer 평균 (µm)</th><th scope="col">깊이오차 평균 (µm)</th></tr></thead>
               <tbody id="compare-rows"></tbody>
             </table>
-            <p class="help">같은 test 레시피·같은 정답(outer_path) 기준. 조건은 설계서 §C4, 증거는 <code>reports/evidence/W6-12_model_comparison.md</code> 참고.</p>
+            <details class="provenance comparison-provenance" open>
+              <summary>W6-12 보고서의 평가 판본·데이터·지표 정의</summary>
+              <dl class="source-details">
+                <div><dt>모델 A · MGN</dt><dd><code>mgn_tuned/model.pt</code> · 2에폭 · 마스크 고정과 교차 가드 적용</dd></div>
+                <div><dt>모델 B · FNO</dt><dd><code>fno_tuned</code> · v2 · 40에폭 · 2스텝 롤아웃 학습</dd></div>
+                <div><dt>평가셋</dt><dd>W6-12 보고서 기준 <code>test</code> 40건(<code>r0340</code>~<code>r0379</code>) · 데이터셋 해시 <code>4b8c0ce1bc98</code></dd></div>
+                <div><dt>공통 기준선</dt><dd>레시피별 마지막 시점의 ViennaPS 표면 윤곽(<code>outer_path</code>)</dd></div>
+                <div><dt>Chamfer 평균</dt><dd>두 윤곽을 0.05 µm 간격으로 보간해 서로의 선분까지 잰 양방향 평균 거리(µm)를 레시피별로 계산한 뒤 평균</dd></div>
+                <div><dt>깊이오차 평균</dt><dd>예측 깊이와 ViennaPS 기준 깊이의 절대 차이(µm)를 레시피별로 계산한 뒤 평균</dd></div>
+              </dl>
+              <p class="help"><a href="https://github.com/code5312/Automation-Project-etch-AI/blob/cc3d4afd4681b84c29e644fc8b78df0f4e09c52a/reports/evidence/W6-12_model_comparison.md">W6-12 평가 보고서</a> · <a href="https://github.com/code5312/Automation-Project-etch-AI/blob/cc3d4afd4681b84c29e644fc8b78df0f4e09c52a/scripts/run_model_comparison.py">평가 스크립트</a></p>
+            </details>
           </div>
         </section>
       </div>
@@ -182,6 +197,7 @@
       <div class="page-title">
         <h1>게이트 이력</h1>
         <p>재학습 시도의 승격·거부 이력입니다(레지스트리 <code>history.jsonl</code>).</p>
+        <button type="button" id="history-refresh" class="secondary">이력 새로고침</button>
       </div>
       <p id="history-status" class="message" role="status" hidden></p>
       <section class="panel" id="history-result" hidden aria-labelledby="history-table-title">
@@ -190,10 +206,13 @@
           <span id="history-count" class="context-label"></span>
         </div>
         <div class="panel-body">
-          <table class="data-table history-table">
-            <thead><tr><th scope="col">시각</th><th scope="col">모델</th><th scope="col">동작</th><th scope="col">결과</th><th scope="col">이유</th></tr></thead>
-            <tbody id="history-rows"></tbody>
-          </table>
+          <p class="help history-scroll-help">표를 좌우로 움직여 나머지 열을 볼 수 있습니다.</p>
+          <div class="history-scroll" tabindex="0" role="region" aria-label="게이트 이력 표">
+            <table class="data-table history-table">
+              <thead><tr><th scope="col">시각</th><th scope="col">모델</th><th scope="col">동작</th><th scope="col">결과</th><th scope="col">이유</th></tr></thead>
+              <tbody id="history-rows"></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </section>
