@@ -60,6 +60,9 @@ def run_training(
     metrics: list[dict] = []
     best_val_loss: float | None = None
     t_start = time.time()
+    # W7-07: fine-tune/학습 루프가 매 에폭 같은 train_ids/val_ids의 그래프 npz를 재읽던
+    # 것을 공유 캐시로 생략(execute.py::fine_tune_fn과 동일한 개선).
+    graph_cache: dict = {}
     for epoch in range(epochs):
         elapsed = time.time() - t_start
         if time_budget_s is not None and elapsed > time_budget_s:
@@ -68,11 +71,15 @@ def run_training(
             )
             break
         t0 = time.time()
-        loss = train_one_epoch(model, optimizer, graphs_root, train_ids, norm=norm, device=device)
+        loss = train_one_epoch(
+            model, optimizer, graphs_root, train_ids, norm=norm, device=device, cache=graph_cache,
+        )
         epoch_time_s = time.time() - t0
         entry = {"epoch": epoch, "loss": loss, "epoch_time_s": epoch_time_s}
         if val_ids is not None and epoch % val_every == 0:
-            val_loss = evaluate(model, graphs_root, val_ids, norm=norm, device=device)
+            val_loss = evaluate(
+                model, graphs_root, val_ids, norm=norm, device=device, cache=graph_cache,
+            )
             entry["val_loss"] = val_loss
             if best_val_loss is None or val_loss < best_val_loss:
                 best_val_loss = val_loss

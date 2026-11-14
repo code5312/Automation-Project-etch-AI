@@ -15,6 +15,7 @@ from etchpipe.etl.etl import THETA_KEYS, etl_run
 from etchpipe.train.loop import (
     GraphDisplacementModel,
     iter_transition_pairs,
+    load_graph,
     load_norm_stats,
     normalize_edge,
     normalize_node,
@@ -121,6 +122,51 @@ def test_normalize_node_and_edge_apply_mean_std(tmp_path: pathlib.Path) -> None:
 
     assert torch.allclose(node_out[:, 1], torch.full((3,), 2.0))  # (4-0)/2
     assert torch.allclose(edge_out, torch.zeros_like(edge_out))  # (0.3-0.3)/0.1 등
+
+
+# W7-07: 전체 파이프라인 실측(증거: reports/evidence/W7-07_pipeline_timing.md)에서
+# fine-tune 단계가 전체의 92%를 차지 — 같은 run_ids를 여러 에폭에 걸쳐 돌 때 npz를
+# 매번 재읽던 게 그 안의 낭비 중 하나였다. cache는 디스크 재읽기만 생략하고 반환값은
+# 동일해야 한다(아래 세 테스트로 확인).
+def test_load_graph_with_cache_avoids_second_disk_read(tmp_path: pathlib.Path) -> None:
+    graphs_root = _build_graphs(tmp_path)
+    path = sorted((graphs_root / "r0000").glob("g*.npz"))[0]
+    cache: dict = {}
+
+    first = load_graph(path, cache=cache)
+    path.unlink()  # 캐시가 안 쓰이면 다음 load_graph가 FileNotFoundError로 터져야 함
+    second = load_graph(path, cache=cache)
+
+    assert second is first  # 같은 캐시 엔트리(새로 읽지 않음)
+
+
+def test_iter_transition_pairs_with_cache_matches_without_cache(tmp_path: pathlib.Path) -> None:
+    graphs_root = _build_graphs(tmp_path)
+
+    without_cache = list(iter_transition_pairs(graphs_root, RUN_IDS))
+    with_cache = list(iter_transition_pairs(graphs_root, RUN_IDS, cache={}))
+
+    assert len(with_cache) == len(without_cache)
+    for a, b in zip(with_cache, without_cache):
+        assert torch.equal(a["node"], b["node"])
+        assert torch.equal(a["true_pos_next"], b["true_pos_next"])
+
+
+def test_train_one_epoch_with_cache_gives_same_loss_as_without(tmp_path: pathlib.Path) -> None:
+    graphs_root = _build_graphs(tmp_path)
+
+    torch.manual_seed(0)
+    model_a: GraphDisplacementModel = ToyNodeMLP()
+    opt_a = torch.optim.Adam(model_a.parameters(), lr=0.01)
+    loss_no_cache = train_one_epoch(model_a, opt_a, graphs_root, RUN_IDS)
+
+    torch.manual_seed(0)
+    model_b: GraphDisplacementModel = ToyNodeMLP()
+    opt_b = torch.optim.Adam(model_b.parameters(), lr=0.01)
+    loss_with_cache = train_one_epoch(model_b, opt_b, graphs_root, RUN_IDS, cache={})
+
+    assert loss_with_cache == loss_no_cache
+    assert torch.equal(model_a.lin.weight, model_b.lin.weight)
 
 
 def test_train_one_epoch_with_norm_runs_and_updates(tmp_path: pathlib.Path) -> None:
