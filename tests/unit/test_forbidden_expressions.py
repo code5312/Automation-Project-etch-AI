@@ -55,3 +55,13 @@ def test_docs_data_card_is_scanned(tmp_path: Path) -> None:
     violations = _mod.find_violations(tmp_path)
     assert len(violations) == 1
     assert violations[0][2] == "실제 fab 데이터"
+
+
+def test_docs_model_card_is_scanned(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "model_card.md").write_text(
+        "이 모델은 정밀 시뮬레이션을 대체한다\n", encoding="utf-8"
+    )
+    violations = _mod.find_violations(tmp_path)
+    assert len(violations) == 1
+    assert violations[0][2] == "대체한다"

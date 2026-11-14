@@ -10,7 +10,7 @@
 <h2>etch-pipeline (식각 공정 AI 대리 모델의 검증·재학습 자동화 파이프라인)</h2>
 <p>ViennaPS 시뮬레이션 데이터로 대리 모델(MeshGraphNet/FNO)을 학습하고, 레시피별 회귀 게이트를 통과한 모델만 등록·서빙·재학습하는 MLOps 워크플로우</p>
 
-<p><a href="#quick-start">Quick Start</a> | <a href="#install">Install</a> | <a href="#pipeline">Pipeline</a> | <a href="#how-to-use">Usage</a> | <a href="#api-endpoints">API</a> | <a href="#data-format">Data</a> | <a href="#option-table">Options</a> | <a href="#trouble-shooting">Troubleshooting</a></p>
+<p><a href="#quick-start">Quick Start</a> | <a href="#demo-한-줄-실행">Demo</a> | <a href="#증거-12-재현">Evidence ①②</a> | <a href="#install">Install</a> | <a href="#pipeline">Pipeline</a> | <a href="#how-to-use">Usage</a> | <a href="#api-endpoints">API</a> | <a href="#data-format">Data</a> | <a href="#option-table">Options</a> | <a href="#trouble-shooting">Troubleshooting</a></p>
 
 </div>
 
@@ -46,7 +46,7 @@
 | C9 대시보드 | `src/etchpipe/dashboard/static/` | 구현. 레시피 입력→예측, 모델 A/B 비교표, 게이트 이력 3화면. Plotly.js 포함 |
 
 > [!NOTE]
-> 설치해서 한 번에 돌려 보는 전체 데모(데이터 생성부터 서빙까지)는 아직 README에 단일 명령으로 정리돼 있지 않습니다 — 각 단계는 [How to use](#how-to-use)를 따라 환경별로 실행합니다. 주차별 진행 상황은 [`docs/project-checklist.md`](docs/project-checklist.md)의 체크박스와 [`reports/evidence/`](reports/evidence)가 기준입니다.
+> 데이터 생성부터 서빙까지 전부를 단일 명령으로 묶은 데모는 없습니다(환경 3분리 때문에 단계마다 컨테이너가 다름) — 대신 **실제 champion+ViennaPS+게이트를 한 명령으로 도는 소규모 데모**는 [Demo](#demo-한-줄-실행)에 있습니다. 개별 단계는 [How to use](#how-to-use)를 따라 환경별로 실행합니다. 주차별 진행 상황은 [`docs/project-checklist.md`](docs/project-checklist.md)의 체크박스와 [`reports/evidence/`](reports/evidence)가 기준입니다.
 
 ---
 
@@ -87,6 +87,34 @@ gate-negative 통과: 10개 케이스 모두 기대대로 동작
 ```
 
 전체 출력과 원인 분석은 [`reports/evidence/ADR-0005_W5-06_revalidation.md`](reports/evidence/ADR-0005_W5-06_revalidation.md)를 참고하세요. 스모크 스크립트는 `build/pipeline_smoke/`에 `processed/`, `registry/`, `summary.json`을 남깁니다. `build/`는 Git에서 제외됩니다.
+
+---
+
+## Demo (한 줄 실행)
+
+**더미 모델이 아니라 실제 champion(`runs/mgn_tuned/model.pt`)·실제 ViennaPS 시뮬레이션·실제 게이트**로 C8 재학습 시나리오 전체(ADR-0002 에스컬레이션 루프)를 작은 드리프트셋(기본 train 2/val 1/golden_drift 1)으로 시연합니다. `etch-serve:0.1`만 있으면 명령 한 줄로 끝까지 돕니다(결과는 production `registry/`에 쓰지 않습니다 — 데모 전용 `build/retrain_demo/`에만 남김).
+
+```bash
+docker build -f docker/Dockerfile.serve -t etch-serve:0.1 .   # 최초 1회
+docker run --rm -v "$(pwd):/app" -w /app etch-serve:0.1 python scripts/run_retrain_demo.py
+# -> build/retrain_demo/result.json (promoted, 시도별 게이트 결과, 단계별 실행 시간)
+```
+
+> [!IMPORTANT]
+> 1차 시도에서 게이트를 통과하면 몇 분 안에 끝나지만, 전부 BLOCK되면 ADR-0002 에스컬레이션(최대 4회, 에폭 3~15)이 CPU 미세조정을 반복해 수 시간까지 걸릴 수 있습니다 — 실측 단계별 시간은 [`reports/evidence/W7-07_pipeline_timing.md`](reports/evidence/W7-07_pipeline_timing.md)를 참고하세요. 더 작게 줄이려면 `N_TRAIN=1 N_GOLDEN_DRIFT=1` 등 환경변수로 조정합니다([Option table](#option-table)).
+
+---
+
+## 증거 ①② 재현
+
+정의서 §3의 두 가지 합격 기준을 **이미 실행해서 남긴 증거**와, **직접 재현하는 명령**입니다.
+
+| | 기준 | 재현 명령 | 실행 증거 |
+|---|---|---|---|
+| **증거 ①** | 정상 모델 통과 / 의도적으로 망가뜨린 모델 CI 차단 / 데이터 해시·골든셋 변조 차단 | `python scripts/run_gate_negative.py` (train 환경, [Quick Start](#quick-start) 3단계와 동일) — 정상 1종·노이즈/1에폭/시뮬레이터 변경 모델 3종을 신구 게이트 경로 양쪽으로 + 해시·골든 변조 2종, 총 10개 케이스 | [`reports/evidence/W5-09_gate_negative.md`](reports/evidence/W5-09_gate_negative.md) (최초 6종 제출본), [`reports/evidence/ADR-0005_W5-06_revalidation.md`](reports/evidence/ADR-0005_W5-06_revalidation.md) (10종 재검증) |
+| **증거 ②** | 가상 드리프트 투입 → 데이터 생성 → 재학습 → 평가 → 게이트 → 교체가 사람 개입 없이 자동 반복(최대 4회) 완주 | `python -m etchpipe.retrain run` (train/serve 환경, 실제 드리프트 데이터 `data/drift/` 필요 — 없으면 위 [Demo](#demo-한-줄-실행)로 축소판을 먼저 확인) | [`reports/evidence/W6-06_retrain_evidence.md`](reports/evidence/W6-06_retrain_evidence.md) + [`W6-06_retrain_before_after.json`](reports/evidence/W6-06_retrain_before_after.json) — 1차 시도 PASS, `registry/current`가 실제로 `mgn_tuned_ep2`→`mgn_retrain_20261112T212130`로 교체됨 확인 |
+
+두 증거 모두 체크박스가 아니라 **실행 로그**로 존재합니다 — 위 두 evidence 파일을 열면 기대 결과와 실제 출력이 나란히 있습니다.
 
 ---
 

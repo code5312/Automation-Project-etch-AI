@@ -42,7 +42,13 @@ dataset_hash = sha1("".join(sorted(run_id별 params_hash)))[:12]
 
 ## 3. 게이트 종료 코드 (C5, `etchpipe.gate.gate.run_gate`)
 
-| 코드 | 의미 |
+> **[W8-04 상태 갱신]** 종료 코드 체계(0/1/2) 자체는 그대로지만, 코드 1이 뜨는 **판정
+> 기준**은 이후 [ADR-0004](0004-golden-scoring-chamfer-and-gate.md)·
+> [ADR-0005](0005-recipe-pass-rate-gate-and-stat-tests.md)로 바뀌었다(현재: 레시피별
+> 깊이·CD·롤아웃 3조건 통과율 90% 미달 + 통계적 퇴보 검정) — 아래 표는 2주차 시점의
+> 최초 설계이며 역사적 기록으로 남긴다. 현재 기준은 두 ADR을 본다.
+
+| 코드 | 의미(2주차 당시 설계, 역사적 기록) |
 |---|---|
 | 0 | PASS |
 | 1 | BLOCK — 성능 미달(골든 Chamfer 초과 또는 롤아웃 후반 오차 급증) |
@@ -61,6 +67,9 @@ dataset_hash = sha1("".join(sorted(run_id별 params_hash)))[:12]
 - `GET /model` → `{"model_version": str, "valid_range": ..., "gate_result": ...}` (API 키 필요)
 - `POST /predict` 요청: `{"recipes": [{ion_flux, etchant_flux, oxygen_flux, ion_mean_energy, ion_exponent, mask_width, mask_height}, ...], "times": [float, ...]}`
 - `POST /predict` 응답: `{"model_version": str, "results": [{"profiles": [{"t": float, "points": [[x,y],...]}], "cd": float, "depth": float, "taper_deg": float, "in_range": bool}, ...]}`
+  — **[W8-04 상태 갱신]** W6-08에서 `clamped: bool`(요청 시간이 학습 스텝 상한을 넘겨
+  잘렸는지) 필드가 추가됨. 기존 필드는 그대로이므로 호환 깨짐 아님, 새 ADR 없이 순수
+  추가로 처리.
 - API 키: `x-api-key` 헤더, 서버 기동 시 `ETCH_API_KEY` 환경변수 필수(없으면 기동 거부)
 - 필수 키 누락/타입 오류 → 422(pydantic 자동 검증)
 
