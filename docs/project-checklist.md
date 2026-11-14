@@ -553,7 +553,14 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   나머지 6건은 조사 결과 이미 일치(대시보드 3화면, kind 성공, 분할 300/40/40/20,
   golden=10 등) — 수정 안 함.
 
-**게이트 G7**: 클린 환경 재현 성공, 테스트 전부 통과, 금지 표현 0건.
+**게이트 G7**: 클린 환경 재현 성공, 테스트 전부 통과, 금지 표현 0건. → **충족(2026-11-14)**
+— ①클린 환경 재현: W7-02(새 clone+새 venv, README만으로 성공, 막힌 곳 수정 완료).
+②금지 표현 0건: 재실행 확인(`check_forbidden_expressions.py` exit 0) + CI
+`forbidden-expressions` job pass. ③테스트 전부 통과: PR #11(`backend-security→main`,
+W7-07/08 포함, merge commit `73af9d4`) CI 7개 job 전부 pass(`lint`, `unit-tests`,
+`serve-tests`, `viennaps-smoke`, `pipeline-smoke`, `gate-negative`,
+`forbidden-expressions`) — W7-05 로컬 254 passed 기준에 더해 최신 커밋까지 실제
+GitHub Actions로 확인됨.
 
 ---
 
