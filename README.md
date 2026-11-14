@@ -10,9 +10,12 @@
 <h2>etch-pipeline (식각 공정 AI 대리 모델의 검증·재학습 자동화 파이프라인)</h2>
 <p>ViennaPS 시뮬레이션 데이터로 대리 모델(MeshGraphNet/FNO)을 학습하고, 레시피별 회귀 게이트를 통과한 모델만 등록·서빙·재학습하는 MLOps 워크플로우</p>
 
-<p><a href="#quick-start">Quick Start</a> | <a href="#demo-한-줄-실행">Demo</a> | <a href="#증거-12-재현">Evidence ①②</a> | <a href="#install">Install</a> | <a href="#pipeline">Pipeline</a> | <a href="#how-to-use">Usage</a> | <a href="#api-endpoints">API</a> | <a href="#data-format">Data</a> | <a href="#option-table">Options</a> | <a href="#trouble-shooting">Troubleshooting</a></p>
+<p><a href="#quick-start">Quick Start</a> | <a href="#demo-한-줄-실행">Demo</a> | <a href="#증거-12-재현">Evidence ①②</a> | <a href="#install">Install</a> | <a href="#pipeline">Pipeline</a> | <a href="#how-to-use">Usage</a> | <a href="#api-endpoints">API</a> | <a href="#data-format">Data</a> | <a href="#option-table">Options</a> | <a href="#final-results">Final results</a> | <a href="#trouble-shooting">Troubleshooting</a></p>
 
 </div>
+
+> [!NOTE]
+> **상태: v1.0 — 8주 계획 전 항목 완료.** 게이트 G7(클린 환경 재현·테스트 전부 통과·금지 표현 0건) 충족, 증거①②(회귀 게이트 차단/재학습 루프 자동 완주) 둘 다 실행 로그로 존재합니다. 최종 벤치마크·한계는 [Final results](#final-results)를 보세요.
 
 ---
 
@@ -38,7 +41,7 @@
 | C1 시뮬레이션 러너 | `src/etchpipe/sim/`, `deploy/k8s/`, `docker/Dockerfile.sim` | 구현. 레시피 샘플링, 단건 실행, 샤드 배치, Kubernetes Indexed Job |
 | C2 ETL | `src/etchpipe/etl/` | 구현. 그래프, 부호 SDF, 정규화 통계, `dataset_hash`, 데이터 검증 |
 | C3 학습 | `src/etchpipe/models/`, `src/etchpipe/train/` | 구현. MeshGraphNet(모델 A, champion `runs/mgn_tuned/`)·FNO(모델 B, `runs/fno_tuned/`) 래퍼. 더미 모델·깊이 MLP 베이스라인은 비교용으로 남겨둠 |
-| C4 평가 | `src/etchpipe/eval/metrics.py` | 구현. Chamfer, IoU, 표면 Dice, HD95, 깊이, 테이퍼, 보잉, 추론 속도 비. **CD(중간 선폭)는 아직 깊이 값으로 대체**(독립 신호 아님, 알려진 한계) |
+| C4 평가 | `src/etchpipe/eval/metrics.py` | 구현. Chamfer, IoU, 표면 Dice, HD95, 깊이, top/mid/bot CD(`cd_profile`, 깊이 10/50/90% 지점), 테이퍼. **보잉은 함수만 있고 실제 모델 결과에 호출된 적이 없음**([확인], 최대 한계 — 아래 Final results) |
 | C5 회귀 게이트 | `src/etchpipe/gate/gate.py` | 구현. 레시피별 깊이·CD·롤아웃 3조건 통과율(90%) + 윌콕슨 IoU 회귀·HD95 악화 검사([ADR-0005](docs/adr/0005-recipe-pass-rate-gate-and-stat-tests.md)), 물리 위반(선 꼬임) 검사 |
 | C6 레지스트리 | `src/etchpipe/registry/` | 구현. 승격, `champion` 포인터, 자동 모델 카드, SHA-256 무결성, `history.jsonl` |
 | C7 서빙 | `src/etchpipe/serve/` | 구현. `/predict`가 실제 champion을 로드. 같은 출처 공개 프록시(`/api/predict`)와 대시보드 정적 파일도 같은 포트에서 서빙 |
@@ -481,6 +484,44 @@ data/raw/<run_id>/
 
 ---
 
+## Final results
+
+골든 10 레시피 기준 모델 A(MeshGraphNet)·모델 B(FNO) 비교(측정 조건·파이프라인별 차이는
+[`reports/evidence/W8-01_final_benchmark.md`](reports/evidence/W8-01_final_benchmark.md)
+참고 — 같은 이름의 지표도 측정 파이프라인이 다르면 섞지 않습니다):
+
+| 지표 | 모델 A | 모델 B |
+|---|---|---|
+| IoU | 0.9689 | 0.9745 |
+| Chamfer (µm) | 0.0901 | 0.0693 |
+| 깊이오차 (%) | 0.8058 | 0.346 |
+
+> [!IMPORTANT]
+> 모델 A는 2 에폭만 학습한 체크포인트라 공정한 성숙도 비교가 아니며, 모델 B는 자동
+> 게이트·레지스트리 승격 플로우를 실제로 통과한 적이 없습니다(팀 평가 노트북으로만
+> 확인) — [`docs/model_card.md`](docs/model_card.md)에 두 모델의 차이를 더 적었습니다.
+
+알려진 한계([`reports/evidence/W8-02_limitations.md`](reports/evidence/W8-02_limitations.md)
+전문):
+
+- **보잉·언더컷 구간 오차 실측 없음** — 가장 큰 공백. `bowing()`이 실제 모델 결과에
+  호출된 적이 0번이고, 롤아웃 구현 자체가 "언더컷 제외"를 가정합니다.
+- 모델 B(FNO)는 OOD(학습 범위 밖) 평가가 없습니다. 모델 A만 실측(Chamfer ×5.8, 깊이오차
+  ×12.4, val 대비).
+- 추론 지연은 API 전체 기준 약 19~20초만 실측됐고, 모델 단독 forward 시간·ViennaPS
+  대비 속도비는 구현만 있고 보고된 적이 없습니다.
+- 2D 한정, 가상(ViennaPS) 시뮬레이션 데이터만 사용 — 실제 설비 계측값과 대조한 적
+  없습니다.
+
+정의서 대비 달성 현황(24개 항목): 달성 15 · 부분달성 5 · 미달 2(보잉, 추론 속도비) ·
+범위 외 2 — 전문은
+[`reports/evidence/W8-04_adr_and_achievement.md`](reports/evidence/W8-04_adr_and_achievement.md),
+향후 과제 11개는
+[`reports/evidence/W8-07_overclaim_check_and_future_work.md`](reports/evidence/W8-07_overclaim_check_and_future_work.md)
+에 정리돼 있습니다.
+
+---
+
 ## Trouble shooting
 
 <details>
@@ -540,7 +581,7 @@ ViennaPS 레이 트레이싱은 내부적으로 스레드를 10개 넘게 씁니
 |---|---|
 | 범위 | 단일 시나리오(2D 트렌치 식각, SF6/O2). 가상 시뮬레이션 데이터만 사용 |
 | 하지 않는 것 | 장비 제어, 3D, KMC/MD 멀티스케일, 팹 수집 데이터 사용 |
-| 미측정 | 추론 속도 이득(ViennaPS 대비 비율은 보고용으로 측정하되 "효율 입증" 주장은 안 함). 측정하지 않은 수치는 문서에 적지 않음 |
+| 미측정 | 보잉·언더컷 구간 오차(실제 모델 결과 호출 0건), 모델 단독 forward 지연, 추론 속도 이득(ViennaPS 대비 비율, "효율 입증" 주장은 안 함), FNO의 OOD 거동. 측정하지 않은 수치는 문서에 적지 않음 — [Final results](#final-results) |
 | 제외 기술 | PhysicsNeMo Curator, ONNX/Triton, Slurm, MLflow, DVC, Transolver |
 
 ---
@@ -552,10 +593,11 @@ ViennaPS 레이 트레이싱은 내부적으로 스레드를 10개 넘게 씁니
 | [`docs/project-definition.md`](docs/project-definition.md) | 무엇을, 왜 만드는가 (정본, 우선순위 1) |
 | [`docs/project-design.md`](docs/project-design.md) | 컴포넌트 C1~C9, API, CI 설계 (우선순위 2) |
 | [`docs/project-checklist.md`](docs/project-checklist.md) | 항목별 작업과 실행 증거 (우선순위 3) |
-| [`docs/data_card.md`](docs/data_card.md) | 데이터 생성 방법, 범위, 알려진 한계 |
+| [`docs/data_card.md`](docs/data_card.md) | 데이터 생성 방법, 범위, 알려진 한계 (최종) |
+| [`docs/model_card.md`](docs/model_card.md) | 현재 champion 모델, 유효 범위, 모델 A/B 비교, 한계 요약 (최종) |
 | [`docs/serving.md`](docs/serving.md) | 서빙 로컬 실행(직접 실행/Compose) |
 | [`docs/adr/`](docs/adr) | 인터페이스 동결(0001), 자동 반복 재학습(0002), 부호 SDF 규약(0003), 골든 채점·게이트 재구성(0004), 레시피별 통과율·통계 검정(0005) |
-| [`reports/evidence/`](reports/evidence) | 항목별 실행 증거 |
+| [`reports/evidence/`](reports/evidence) | 항목별 실행 증거(90개 이상) — 최종 결과는 [Final results](#final-results) |
 | [`CLAUDE.md`](CLAUDE.md) | 이 저장소에서 작업할 때의 범위, 원칙, 규칙 |
 
 ## License
