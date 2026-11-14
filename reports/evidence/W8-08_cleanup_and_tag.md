@@ -76,7 +76,18 @@ git tag -a v1.0 -m "etch-pipeline v1.0 — 8주차 완료, 증거①② 확보, 
 git push origin v1.0
 ```
 
+## 4. 추가 수정: 실제 푸시 후 CI에서 드러난 lint 실패 [확인]
+
+커밋·푸시 후 `pr-check` 실제 실행에서 `lint` job만 실패했다(나머지 6개는 전부 pass —
+`unit-tests`에 `test_fno.py` 포함). 원인: `runs/fno_tuned/inference.py`(teammate 원본,
+위에서 처음 커밋)가 `ruff check .`의 E501(줄 길이 100자 초과) 1건에 걸림 — 커밋 전엔
+로컬에만 있어 lint 대상이 아니었던 파일이 처음으로 스캔된 것. 원본 코드를 고치는 건
+"재구현하지 않는다" 원칙에 어긋나므로, `pyproject.toml`의 `extend-exclude`에
+`runs/fno_tuned` 추가(이미 같은 이유로 `sim_batch.py`가 제외돼 있던 패턴과 동일) —
+로컬 `ruff check .`로 재확인(`All checks passed!`).
+
 ## 미확인/남은 작업
 
-- 없음 — 발견한 재현성 공백은 이번에 바로 고쳤다(향후 과제로 미루지 않음, W7-08류
-  "DOC-" 보류 대상과는 성격이 달라 바로 수정 가능한 범위였음).
+- 없음 — 발견한 재현성 공백과 거기서 드러난 lint 실패 둘 다 이번에 바로 고쳤다(향후
+  과제로 미루지 않음, W7-08류 "DOC-" 보류 대상과는 성격이 달라 바로 수정 가능한
+  범위였음).

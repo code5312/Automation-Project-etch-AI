@@ -628,7 +628,10 @@ GitHub Actions로 확인됨.
   mgn_tuned와 같은 패턴으로 `config.json`/`inference.py`/`preprocess.py`/
   `model.safetensors` 4개만 `.gitignore` 예외 추가해 커밋(부수로 `safetensors==0.8.0`
   명시 고정도 필요해서 추가). `etch-train:0.1`에서 실제 검증: test_fno.py 3개 포함
-  5 passed, 전체 unit 217 passed. 태그는 git 작업이라 사용자가 직접 실행. 증거:
+  5 passed, 전체 unit 217 passed. **푸시 후 실제 CI에서 `lint`만 실패**(처음 커밋된
+  teammate 원본 `inference.py`가 E501 1건 걸림) — 원본을 고치지 않고 `pyproject.toml`
+  `extend-exclude`에 `runs/fno_tuned` 추가로 수정, 로컬 `ruff check .` 재확인
+  (`All checks passed!`). 태그는 git 작업이라 사용자가 직접 실행. 증거:
   `reports/evidence/W8-08_cleanup_and_tag.md`.
 - [x] 예비: 밀린 항목 처리 — "보류"/"나중에"로 남아 있던 전체 줄 전수 재확인
   (W3-01 rays/grid_delta 미검증 트리거 미발동 확인 → 향후 과제 11번째로 이동, W3-12

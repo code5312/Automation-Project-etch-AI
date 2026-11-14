@@ -26,13 +26,18 @@ where = ["src"]
 line-length = 100
 target-version = "py311"
 # 스파이크 1회용 코드는 스타일 규칙에서 제외한다:
-#   - sim_batch.py/mgn_smoke_test.py: seed/에서 그대로 옮긴 원본 — 내용을 수정하지 않기로
-#     했음(사용자 지시). 2주차 이후 정식 구현으로 교체되면서 자연히 없어질 예정.
+#   - sim_batch.py: seed/에서 그대로 옮긴 원본 — 내용을 수정하지 않기로 했음(사용자 지시).
+#     2주차 이후 정식 구현으로 교체되면서 자연히 없어질 예정.
 #   - reports/evidence/의 스크립트도 스파이크 1회용 코드라 같은 이유로 제외한다.
+#   - runs/fno_tuned(W8-08): GPU 팀원이 전달한 실제 체크포인트+코드 — "재구현하지 않는다"
+#     원칙(src/etchpipe/models/fno.py 모듈 docstring)과 같은 이유로 그대로 둔다. 커밋 전엔
+#     로컬에만 있어 lint 대상이 아니었다가, W8-08에서 처음 커밋되면서 E501(100자 초과,
+#     teammate 원본 주석 줄) 1건이 CI에서 처음 드러남(2026-11-14) — 코드를 고치는 대신
+#     제외 목록에 추가해 원본을 그대로 보존.
 extend-exclude = [
     "src/etchpipe/sim/sim_batch.py",
-    "scripts/mgn_smoke_test.py",
     "reports/evidence",
+    "runs/fno_tuned",
 ]
 
 [tool.ruff.lint]
