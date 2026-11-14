@@ -541,7 +541,17 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   손실/가중치 불변 테스트 3건 추가(`test_train_loop.py`, 총 14 passed in 68.00s) +
   실제 champion/실제 demo 데이터 격리 벤치마크로 6.3% 단축 확인(371.06s → 348.99s,
   5에폭). 증거: `reports/evidence/W7-07_pipeline_timing.md`.
-- [ ] W7-08 문서·코드 불일치 목록 정리 후 문서 수정
+- [x] W7-08 문서·코드 불일치 목록 정리 후 문서 수정 — definition.md·design.md 전체를
+  읽고 체크리스트·실제 코드·실제 산출물과 교차 검증, 불일치 후보 13건 조사
+  (`reports/evidence/W7-08_doc_code_mismatches.md`). 실제 불일치 7건(DOC-02) 확인 후
+  수정: ①학습 1스텝 시간 추정치(40~180ms→실측 1.8~4.1초/전이쌍, definition.md §10 +
+  design.md §14) ②다단계 롤아웃 미확인→확인됨(W4-05~07 완료) ③FNO 미확인→확인됨
+  (`runs/fno_tuned/` 실존, W6-11) ④환경 공존 미확인→확인됨(`execute.py` docstring이
+  이미 명시) ⑤추론 속도 비: "구현됨, 미보고"로 명확화(§9) ⑥design.md §5/§7 예시의
+  mask_width/height categorical choices → 실제 구현(연속 float µm)으로 교체 ⑦design.md
+  §7 API 표에 실제 구현된 `/api/predict`,`/api/models/compare`,`/api/gate/history` 추가.
+  나머지 6건은 조사 결과 이미 일치(대시보드 3화면, kind 성공, 분할 300/40/40/20,
+  golden=10 등) — 수정 안 함.
 
 **게이트 G7**: 클린 환경 재현 성공, 테스트 전부 통과, 금지 표현 0건.
 

@@ -245,8 +245,8 @@ sim:
     oxygen_flux:     {scale: log,    low_x: 0.3, high_x: 3.0}
     ion_mean_energy: {scale: linear, low_x: 0.5, high_x: 1.5}
     ion_exponent:    {scale: linear, low_x: 0.5, high_x: 2.0}
-    mask_width:      {choices: [narrow, mid, wide]}
-    mask_height:     {choices: [low, high]}
+    mask_width:      {scale: linear, low: 6.0, high: 14.0}   # µm, 연속값(DOC-02 수정 — 실제 구현은
+    mask_height:     {scale: linear, low: 6.0, high: 14.0}   # µm            categorical choices 아님)
   snapshots: {steps: 25}
 model:
   name: meshgraphnet            # meshgraphnet | fno
@@ -294,23 +294,31 @@ etch-pipeline/
 | `POST /predict` | 레시피 배치 → 프로파일·지표 |
 | `GET /model` | 현재 배포 모델의 버전, 데이터 해시, 유효 범위, 게이트 결과 |
 | `GET /health` | 상태 확인 |
+| `POST /api/predict` | `/predict`와 동일(대시보드 C9 전용 별칭) **[DOC-02 추가, 2026-11-14 —**
+  **실제 구현에 있었으나 이 표에 없었음]** |
+| `GET /api/models/compare` | 모델 A/B 비교표(C4) — 대시보드 "모델 비교" 화면용 **[DOC-02 추가]** |
+| `GET /api/gate/history` | 게이트 판정 이력(C5 `reports/<run_id>/gate.json` 모음) — 대시보드
+  "지표·게이트 이력" 화면용 **[DOC-02 추가]** |
 
 `POST /predict` 요청/응답 개요
 
 ```json
 // request
-{ "recipes": [ { "ion_flux": 1.0, "etchant_flux": 1.0, "oxygen_flux": 1.0,
-                 "ion_mean_energy": 1.0, "ion_exponent": 1.0,
-                 "mask_width": "mid", "mask_height": "low" } ],
+{ "recipes": [ { "ion_flux": 10.0, "etchant_flux": 5000.0, "oxygen_flux": 800.0,
+                 "ion_mean_energy": 100.0, "ion_exponent": 300.0,
+                 "mask_width": 10.0, "mask_height": 10.0 } ],
   "times": [0.25, 0.5, 1.0] }
 // response
 { "model_version": "m-0007",
   "results": [ { "profiles": [ {"t": 0.25, "points": [[x,y], ...]} ],
                  "cd": 0.0, "depth": 0.0, "taper_deg": 0.0,
-                 "in_range": true } ] }
+                 "in_range": true, "clamped": false } ] }
 ```
 
-(수치는 형태 예시이며 실제 단위는 ViennaPS 설정 확인 후 확정)
+(수치는 형태 예시; `mask_width`/`mask_height`는 µm 연속값 — **DOC-02(2026-11-14) 수정**:
+이전 예시는 categorical choices("mid"/"low")로 잘못 적혀 있었음, 실제 구현
+(`src/etchpipe/serve/app.py::Recipe`)은 처음부터 연속 float이었다. `clamped`는 W6-08에서
+추가된 필드(요청 시간이 학습 상한을 넘겨 잘렸는지).)
 
 **입력 검증 규칙**: 필수 키 누락·타입 오류는 422, 한 요청의 배치 크기 상한, 수치 범위 상·하한(비정상 값 거부), 요청 크기 제한. 유효 범위 밖은 거부하지 않고 `in_range=false`로 **경고만** 한다(사용자가 의도적으로 탐색할 수 있게). [제안]
 
@@ -404,7 +412,9 @@ LLM이 작성한 코드와 설명도 위 검증을 거친다. **물리적 타당
 
 비고
 - `.vtp`→그래프/거리장 변환 최소 예제는 샌드박스에서 이미 동작 확인됨 [확인, 정의서 §10] — 위 스파이크 범위 아님.
-- MeshGraphNet 1에폭 학습 시간·메모리(CPU, 노드 300~400개, 약 40~180ms/스텝)는 샌드박스에서 이미 측정됨 [확인, 정의서 §10] — 위 스파이크 범위 아님.
+- MeshGraphNet 1에폭 학습 시간(CPU)은 1주차 토이 규모로 샌드박스에서 가볍게 측정했으나,
+  **그 수치(40~180ms/스텝)는 4주차·7주차 실제 champion 모델 재측정으로 폐기됐다** —
+  실제로는 전이쌍당 1.8~4.1초(정의서 §10, DOC-02, 2026-11-14 수정). 위 스파이크 범위 아님.
 - 능동 학습(선택 범위, 정의서 §5.2)은 증거 ①②를 확보하기 전에는 착수하지 않는다 — 1주차 스파이크에서 제외.
 
 ## 15. 설계 결정 기록 (주요 결정과 이유)

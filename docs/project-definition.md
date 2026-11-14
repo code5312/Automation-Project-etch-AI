@@ -136,14 +136,30 @@
 - `ViennaPS==4.5.0` + `ViennaLS==5.8.5`에서만 import 성공(Python 3.13). 기본 설치 시 ViennaLS 5.9.0이 설치되어 실패.
 - 스냅샷: Process를 짧은 duration으로 반복하고 매번 `domain.saveSurfaceMesh(path, addInterfaces=True)`. `MaterialIds`·`Normals`는 셀 데이터. pyvista로 읽음(meshio는 .vtp 불가).
 - 시뮬레이션 5스텝(rays=300): 레시피별 약 3.8~37초. 5분 후 깊이 약 7~42µm.
-- `nvidia-physicsnemo 2.2.2` MeshGraphNet은 PyTorch Geometric + torch_scatter 필수. torch_scatter는 `pip install --no-build-isolation torch_scatter`로 소스 빌드. 우리 그래프(노드 14, 엣지 3, 출력 2)는 CPU에서 forward/backward 동작, 학습 1스텝 약 40~180ms (노드 300~400개).
-- PyPI torch 설치 시 CUDA 라이브러리 포함 약 10GB.
+- `nvidia-physicsnemo 2.2.2` MeshGraphNet은 PyTorch Geometric + torch_scatter 필수. torch_scatter는 `pip install --no-build-isolation torch_scatter`로 소스 빌드. 우리 그래프(노드 14, 엣지 3, 출력 2)는 CPU에서 forward/backward 동작.
+- **(DOC-02, W7-08 수정)** 학습 1스텝(전이쌍) 시간: 1주차 샌드박스 토이 규모 추정("노드
+  300~400개, 약 40~180ms/스텝")은 실제 champion급(tuned) MeshGraphNet으로 재확인한
+  결과 더 느린 것으로 나타나 폐기한다[이전 수치는 사실로 쓰지 않음] — 4주차 실측
+  150~290초/에폭(레시피 5개=전이쌍 71개, 호스트 CPU 경쟁 포함, `project-checklist.md`
+  4주차 역할분담 결정 메모) ≈ 전이쌍당 2.1~4.1초. W7-07 격리 재실측(경쟁 없음, 레시피
+  2개=전이쌍 38개, `reports/evidence/W7-07_pipeline_timing.md`): 68~87초/에폭 ≈
+  전이쌍당 1.8~2.3초.
+- **(DOC-02)** 다단계 롤아웃(예측 표면 재입력, K스텝): 4주차 W4-05~07에서 실제 동작 확인 —
+  Chamfer·깊이오차 수치 포함, D4 게이트 통과(`project-checklist.md` 4주차,
+  `reports/evidence/W4-05_rollout_v1.md`). 더 이상 "가장 불확실"이 아니다.
+- **(DOC-02)** FNO(모델 B): 구현·학습·평가 완료. `runs/fno_tuned/`(model.pt,
+  model.safetensors, metrics/champion.json, val_summary.json) — 골든 10 Chamfer 0.069µm
+  합격(`project-checklist.md` W6-11, 2026-11-12). 모델 A/B 비교표도 있음(같은 문서).
+- **(DOC-02)** 학습·시뮬레이션 환경 공존 여부: 기본은 분리(ViennaPS 환경 / 학습 환경 /
+  서빙 환경, §11) — 단 서빙 이미지(`etch-serve:0.1`)는 예외적으로 torch+physicsnemo+
+  ViennaPS를 함께 설치한다(`retrain/execute.py` 모듈 docstring: "환경 3분리에서
+  벗어난 서빙 이미지" — 2차 시도 드리프트 재생성이 서빙 이미지 안에서 돌아야 해서).
 
 ### 미확인
-- 다단계 롤아웃(예측 표면 재입력 20스텝) — 가장 불확실
-- FNO 구현·학습, 추론 속도, 속도 이득
+- 추론 속도 비(ViennaPS 시간 ÷ 모델 시간, §9 [ADR-0005]): `eval/metrics.py::speed_ratio`
+  함수는 구현·단위테스트됐으나(`tests/unit/test_metrics.py`), 실제 데이터로 호출해
+  수치를 보고한 적은 아직 없다[미확인, W7-08에서 구분].
 - ViennaPS GPL-3.0이 배포에 미치는 영향에 대한 세부 법적 검토(대응 방침은 §11 라이선스 항목 참조)
-- 학습·시뮬레이션 환경 공존 여부(기본은 분리)
 
 ## 11. 제약
 
