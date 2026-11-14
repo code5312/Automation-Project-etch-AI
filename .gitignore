@@ -82,3 +82,16 @@ seed.zip
 /runs/mgn_tuned/*
 !/runs/mgn_tuned/model.pt
 
+# W8-08(2026-11-14, 사용자 결정): README가 "fno_tuned도 예외"라고 이미 적어 뒀는데
+# 실제로는 한 번도 커밋된 적이 없었다 — 깨끗한 clone에서 scripts/run_model_comparison.py
+# 와 tests/unit/test_fno.py가 깨지는 걸 발견(둘 다 runs/fno_tuned/를 직접 읽음). mgn_tuned와
+# 같은 패턴으로, 재추론에 필요한 최소 파일만 예외로 둔다(원본 teammate 체크포인트 폴더의
+# metrics/·example/·model.pt·README.md는 그대로 제외 — model.safetensors 하나로 충분,
+# inference.py가 그걸 먼저 찾음).
+!/runs/fno_tuned/
+/runs/fno_tuned/*
+!/runs/fno_tuned/config.json
+!/runs/fno_tuned/inference.py
+!/runs/fno_tuned/preprocess.py
+!/runs/fno_tuned/model.safetensors
+

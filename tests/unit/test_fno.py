@@ -1,6 +1,9 @@
 """W6-11: FNO 래퍼 — GPU 팀원이 전달한 `runs/fno_tuned/` 실제 체크포인트로 검증한다.
-`runs/`는 `.gitignore` 대상(`mgn_tuned/model.pt`만 예외)이라 `fno_tuned/`는 로컬에만
-있다 — 없는 환경(CI 포함)에서는 건너뛴다."""
+W8-08(2026-11-14)부터 `config.json`/`inference.py`/`preprocess.py`/`model.safetensors`
+4개는 `mgn_tuned/model.pt`와 같은 패턴으로 `.gitignore` 예외로 커밋됨 — 더 이상
+"로컬 전용"이 아니라 CI(unit-tests job, train 스택)에서도 그대로 돈다. `metrics/`·
+`example/`·`model.pt`·팀원 README는 재추론에 불필요해 그대로 제외 상태 — 그 파일들에
+의존하는 아래 개별 테스트는 각자 `pytest.skip`으로 따로 처리한다."""
 
 import pathlib
 
@@ -12,7 +15,7 @@ from etchpipe.models.fno import FNOModel, load_fno_config
 RUN_DIR = pathlib.Path(__file__).resolve().parents[2] / "runs" / "fno_tuned"
 
 pytestmark = pytest.mark.skipif(
-    not RUN_DIR.exists(), reason="runs/fno_tuned 체크포인트 없음(로컬 전용, .gitignore 대상)"
+    not RUN_DIR.exists(), reason="runs/fno_tuned 체크포인트 없음(.gitignore 예외 파일 누락)"
 )
 
 

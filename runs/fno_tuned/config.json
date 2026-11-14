@@ -1,0 +1,112 @@
+{
+ "name": "fno-etch-sdf-v2",
+ "source_run": "E3_unroll2_noise0.1_seed0",
+ "framework": "physicsnemo 2.2.2 (physicsnemo.models.fno.FNO)",
+ "model_kwargs": {
+  "in_channels": 8,
+  "out_channels": 1,
+  "dimension": 2,
+  "latent_channels": 32,
+  "num_fno_layers": 4,
+  "num_fno_modes": 16,
+  "padding": 8,
+  "padding_type": "constant",
+  "activation_fn": "gelu",
+  "decoder_layers": 1,
+  "decoder_layer_size": 32,
+  "decoder_activation_fn": "silu",
+  "coord_features": true
+ },
+ "input": {
+  "channels": [
+   "sdf / sdf_std",
+   "theta_ion_flux (normalized)",
+   "theta_etchant_flux (normalized)",
+   "theta_oxygen_flux (normalized)",
+   "theta_ion_mean_energy (normalized)",
+   "theta_ion_exponent (normalized)",
+   "theta_mask_width (normalized)",
+   "theta_mask_height (normalized)"
+  ],
+  "sdf_std_um": 24.032507362133465,
+  "sdf_sign": "solid(mask+Si) negative, vacuum positive",
+  "theta_keys": [
+   "ion_flux",
+   "etchant_flux",
+   "oxygen_flux",
+   "ion_mean_energy",
+   "ion_exponent",
+   "mask_width",
+   "mask_height"
+  ],
+  "theta_range": {
+   "ion_flux": {
+    "low": 3.0,
+    "high": 30.0,
+    "log": true
+   },
+   "etchant_flux": {
+    "low": 1350.0,
+    "high": 13500.0,
+    "log": true
+   },
+   "oxygen_flux": {
+    "low": 240.0,
+    "high": 2400.0,
+    "log": true
+   },
+   "ion_mean_energy": {
+    "low": 50.0,
+    "high": 200.0,
+    "log": false
+   },
+   "ion_exponent": {
+    "low": 100.0,
+    "high": 1000.0,
+    "log": true
+   },
+   "mask_width": {
+    "low": 6.0,
+    "high": 14.0,
+    "log": false
+   },
+   "mask_height": {
+    "low": 6.0,
+    "high": 14.0,
+    "log": false
+   }
+  },
+  "theta_normalization": "2*(v-low)/(high-low)-1, log applied to v/low/high when log=true"
+ },
+ "output": {
+  "meaning": "SDF change over 1 minute (t+1 - t), divided by delta_std",
+  "delta_std_um": 2.014297823412264
+ },
+ "step_minutes": 1.0,
+ "grid": {
+  "y_bottom_um": -68.0,
+  "y_top_um": 21.0,
+  "ny": 128,
+  "x_min_um": -15.0,
+  "x_max_um": 15.0,
+  "nx": 256,
+  "array_order": "sdf[y_index, x_index], y ascending (row 0 = y_bottom)",
+  "y0": "original Si top surface"
+ },
+ "etl_version": "fixed-v2 (interface removed, y_below=deepest-1, right edge) | y -68.0..21.0 NY 128 | x -15.0..15.0 NX 256",
+ "training": {
+  "optimizer": "Adam",
+  "lr": 0.001,
+  "scheduler": "CosineAnnealingLR(T_max=epochs, eta_min=0), 에폭마다",
+  "loss": "MSE (전체 칸 평균)",
+  "batch": 8,
+  "epochs": 40,
+  "seed": 0,
+  "output": "delta (t+1 - t) / DELTA_STD",
+  "input": "SDF / SDF_STD + theta 7판",
+  "noise": "가우시안 0.1µm, 정답 보정",
+  "unroll2": "2스텝, 2번째 입력 detach, 가중치 1.0",
+  "reinit": null,
+  "surface_weight": null
+ }
+}
