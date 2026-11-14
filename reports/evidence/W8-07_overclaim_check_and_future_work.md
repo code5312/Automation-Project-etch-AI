@@ -45,7 +45,7 @@ $ grep -rnoE "정확|완벽|최적|효율|뛰어난|최고|검증된|입증|보�
 | 2 | FNO(모델 B) OOD 20개 평가 | 모델 A만 OOD 평가됨, B는 전무 | `scripts/run_model_comparison.py` 패턴을 OOD 분할에도 적용 |
 | 3 | 모델 단독 forward 지연 + 추론 속도비 실측 | `measure_latency()`/`speed_ratio()` 구현만 있고 호출 0건 | 실제 champion으로 1회 호출해 수치를 내고 README/모델카드에 반영 |
 | 4 | `max_latency_s` 게이트 임계치 설정 | 지연 미실측이라 비워 둔 상태 | #3 완료 후 여유분을 두고 설정 |
-| 5 | 두 모델 학습 GPU 기종 기록 | 재현성 메타데이터 공백(결과 자체엔 영향 없음) | 다음 학습 때 `nvidia-smi` 출력을 `runs/*/meta.json`에 같이 저장 |
+| 5 | ~~두 모델 학습 GPU 기종 기록~~ | **(v1.0 이후 갱신)** RTX A5000 기종·92.9배 학습 속도 실측됨(`reports/evidence/W8-09_gpu_feasibility.md`) — 단, 자동 재학습 루프(`retrain/execute.py`)의 GPU 지원 자체는 미구현(`device` 파라미터 없음, 하드코딩된 CPU) | `make_fine_tune_fn`에 `device` 파라미터 추가 + 호출부(`run()`, `run_retrain_demo.py`) 반영이 다음 단계 |
 | 6 | 레지스트리 카드 `git_sha` 필드 손상(mojibake) | `reports/eval/*_val40_guarded/metrics.json` 등에서 인코딩 깨짐 | 저장 시 인코딩 지정(UTF-8 명시) 후 재생성 — 버그 리포트로 별도 등록 |
 | 7 | 선택 범위(정의서 §5.2) 착수 검토 | 증거①②는 이미 확보됨 — 조건은 충족, 시간이 없어 미착수 | 레시피 추천이 가장 적은 의존성으로 시작 가능해 보임[제안] |
 | 8 | 3D 확장 | 처음부터 범위 밖으로 고정 | 이번 2D 파이프라인의 C1~C9 구조는 그대로 재사용 가능할 것으로 보이나 실제 검증 안 함[미확인] |

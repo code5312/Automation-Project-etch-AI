@@ -520,6 +520,11 @@ data/raw/<run_id>/
 [`reports/evidence/W8-07_overclaim_check_and_future_work.md`](reports/evidence/W8-07_overclaim_check_and_future_work.md)
 에 정리돼 있습니다.
 
+> [!NOTE]
+> v1.0 이후: 같은 재학습 시나리오를 GPU(RTX A5000)에서 재현한 결과, 품질 저하 없이
+> 학습 시간이 약 92.9배 단축됨을 실측(단, 자동 재학습 루프 자체의 GPU 지원은 아직
+> 미구현) — [`reports/evidence/W8-09_gpu_feasibility.md`](reports/evidence/W8-09_gpu_feasibility.md).
+
 ---
 
 ## Trouble shooting
