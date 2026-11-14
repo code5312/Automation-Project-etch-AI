@@ -120,11 +120,14 @@ def make_fine_tune_fn(state: DriftState, fallback_norm, out_root: pathlib.Path =
         out_dir = out_root / f"attempt{cfg['attempt']}_{int(time.time())}"
         out_dir.mkdir(parents=True, exist_ok=True)
         history = []
+        # W7-07: 전체 파이프라인 중 fine-tune 단계가 압도적 병목(실측 92%)이었다 — 같은
+        # train_ids의 그래프 npz를 epochs번 그대로 재읽던 것을 에폭 간 공유 캐시로 생략.
+        graph_cache: dict = {}
         for epoch in range(epochs):
             t0 = time.time()
             loss = train_one_epoch(
                 model, optimizer, state.graphs_root, state.splits["train"],
-                norm=norm, device="cpu",
+                norm=norm, device="cpu", cache=graph_cache,
             )
             history.append({"epoch": epoch, "loss": loss, "epoch_time_s": time.time() - t0})
         ckpt_path = out_dir / "model.pt"

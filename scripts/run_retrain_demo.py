@@ -58,18 +58,34 @@ def _make_scaled_regenerate_fn(state: DriftState, initial_n_train: int):
     return regenerate_fn
 
 
+def _timed(fn, bucket: list[float]):
+    """W7-07: 호출마다 걸린 시간을 `bucket`에 누적만 하는 투명 래퍼(fine_tune_fn/gate_fn을
+    `run_retrain_loop`에 주입하기 전에 감싼다 — loop.py/execute.py 자체는 건드리지 않음)."""
+
+    def wrapped(*args, **kwargs):
+        t0 = time.time()
+        result = fn(*args, **kwargs)
+        bucket.append(time.time() - t0)
+        return result
+
+    return wrapped
+
+
 def main() -> int:
     n_train = int(os.environ.get("N_TRAIN", "2"))
     n_val = int(os.environ.get("N_VAL", "1"))
     n_golden_drift = int(os.environ.get("N_GOLDEN_DRIFT", "1"))
     raw_dir = DEMO_ROOT / "raw"
+    pipeline_t0 = time.time()
 
     print(f"데모 드리프트 레시피 {n_train + n_val + n_golden_drift}개 ViennaPS 시뮬레이션 중...")
     # `DriftState`는 원래(W6-03/04) raw_dir에 meta.json이 이미 있다고 가정한다
     # (실 운영에선 run_drift_data_gen.py가 별도로 먼저 돌려둠) — 데모는 이 스크립트가
     # 직접 처음 생성까지 포함한다. 같은 (n/seed/prefix)로 drift_splits()를 두 번(여기·
     # DriftState 내부) 호출해도 결정적이라 같은 레시피가 나온다[확인].
+    sim_t0 = time.time()
     splits, params_by_id = drift_splits(n_train, n_val, n_golden_drift, DEMO_SEED, DEMO_PREFIX)
+    n_simulated = 0
     for group in splits.values():
         for rid in group:
             out = raw_dir / rid
@@ -77,9 +93,12 @@ def main() -> int:
                 meta = run_sim(
                     params_by_id[rid], out, substrate_a_ie=SUBSTRATE_A_IE, sim_config_id="live_v1"
                 )
+                n_simulated += 1
                 print(f"  ok {rid}: wall_sec={meta['wall_sec']}, actual_k={meta['actual_k']}")
+    sim_sec = time.time() - sim_t0
 
     print("ETL 중...")
+    etl_t0 = time.time()
     state = DriftState(
         raw_dir=raw_dir,
         processed_root=DEMO_ROOT / "processed",
@@ -87,17 +106,34 @@ def main() -> int:
         seed=DEMO_SEED, prefix=DEMO_PREFIX,
         expand_seed=9600, expand_prefix="demox",
     )
+    etl_sec = time.time() - etl_t0
     print(f"  train={len(state.splits['train'])} val={len(state.splits['val'])} "
           f"golden_drift={len(state.splits['golden_drift'])} dataset_hash={state.dataset_hash}")
 
     _model, _note, champion_norm = load_model_a(CHAMPION_CKPT)
 
+    fine_tune_sec_by_attempt: list[float] = []
+    gate_sec_by_attempt: list[float] = []
     result = run_retrain_loop(
         CHAMPION_CKPT,
-        make_fine_tune_fn(state, champion_norm, out_root=DEMO_ROOT / "runs"),
-        make_gate_fn(state),
+        _timed(
+            make_fine_tune_fn(state, champion_norm, out_root=DEMO_ROOT / "runs"),
+            fine_tune_sec_by_attempt,
+        ),
+        _timed(make_gate_fn(state), gate_sec_by_attempt),
         regenerate_fn=_make_scaled_regenerate_fn(state, n_train),
     )
+    total_sec = time.time() - pipeline_t0
+
+    timings = {
+        "sim_sec": round(sim_sec, 1),
+        "sim_recipes_newly_simulated": n_simulated,
+        "etl_sec": round(etl_sec, 1),
+        "fine_tune_sec_by_attempt": [round(s, 1) for s in fine_tune_sec_by_attempt],
+        "gate_sec_by_attempt": [round(s, 1) for s in gate_sec_by_attempt],
+        "total_sec": round(total_sec, 1),
+    }
+    print(f"\n단계별 실행 시간(W7-07): {timings}")
 
     summary = {
         "timestamp": time.strftime("%Y%m%dT%H%M%S"),
@@ -105,6 +141,7 @@ def main() -> int:
         "n_recipes": {"train": n_train, "val": n_val, "golden_drift": n_golden_drift},
         "dataset_hash": state.dataset_hash,
         "promoted": result["promoted"],
+        "timings": timings,
         "attempts": [
             {"attempt": a["attempt"], "config": a["config"], "gate_result": a["gate_result"]}
             for a in result["attempts"]

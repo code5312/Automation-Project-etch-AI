@@ -65,26 +65,41 @@ def normalize_edge(edge: torch.Tensor, norm: NodeEdgeNorm) -> torch.Tensor:
     return (edge - norm.edge_mean) / norm.edge_std
 
 
-def load_graph(path) -> dict[str, torch.Tensor]:
-    """그래프 npz 1개(`etl.to_graph` 출력) 로드. 롤아웃(`train/rollout.py`)에서도 재사용."""
-    z = np.load(path)
-    return {
+def load_graph(
+    path, cache: dict[Path, dict[str, torch.Tensor]] | None = None
+) -> dict[str, torch.Tensor]:
+    """그래프 npz 1개(`etl.to_graph` 출력) 로드. 롤아웃(`train/rollout.py`)에서도 재사용.
+
+    `cache`를 주면(W7-07) 같은 경로를 다시 요청할 때 디스크 재읽기 없이 캐시된 텐서를
+    그대로 돌려준다 — 호출자는 반환된 텐서를 읽기만 하고(정규화는 새 텐서를 만듦,
+    `normalize_node`/`normalize_edge` 참고) 제자리 수정은 하지 않으므로 여러 에폭·여러
+    쌍에서 안전하게 공유 가능[확인]. `cache=None`(기본)이면 기존과 동일하게 매번 새로 읽음."""
+    key = Path(path)
+    if cache is not None and key in cache:
+        return cache[key]
+    z = np.load(key)
+    graph = {
         "node": torch.from_numpy(z["node"]),
         "edge_index": torch.from_numpy(z["edge_index"]),
         "edge": torch.from_numpy(z["edge"]),
         "pos": torch.from_numpy(z["pos"]),
     }
+    if cache is not None:
+        cache[key] = graph
+    return graph
 
 
-def iter_transition_pairs(graphs_root, run_ids: list[str]) -> Iterator[dict[str, torch.Tensor]]:
+def iter_transition_pairs(
+    graphs_root, run_ids: list[str], cache: dict[Path, dict[str, torch.Tensor]] | None = None
+) -> Iterator[dict[str, torch.Tensor]]:
     """run_ids 각각의 그래프 디렉터리(g000.npz, g001.npz, ...)에서 연속한 (k, k+1) 쌍을
     순서대로 내놓는다. 입력(t_k)은 항상 저장된 정답 그래프에서 로드(팀포싱)."""
     root = Path(graphs_root)
     for rid in sorted(run_ids):
         files = sorted((root / rid).glob("g*.npz"))
         for a, b in zip(files, files[1:]):
-            cur = load_graph(a)
-            nxt = load_graph(b)
+            cur = load_graph(a, cache=cache)
+            nxt = load_graph(b, cache=cache)
             yield {
                 "run_id": rid,
                 "node": cur["node"],
@@ -126,16 +141,19 @@ def train_one_epoch(
     run_ids: list[str],
     norm: NodeEdgeNorm | None = None,
     device: str = "cpu",
+    cache: dict[Path, dict[str, torch.Tensor]] | None = None,
 ) -> float:
     """전이쌍 전체를 한 번씩 돌며(팀포싱) 학습한다. 쌍마다 개별 역전파(점 개수가 쌍마다
     달라 배치로 묶기 어려움). `norm`을 주면 모델에 넣기 전 node/edge를 정규화(출력 변위는
     정규화하지 않음 — 체크포인트에 별도 출력 통계가 없어 raw 그대로 사용). `device`("cpu"/
     "cuda")로 각 텐서를 옮긴다 — 모델을 해당 device로 옮기는 건 호출자 책임(W4-04,
     `train_main.run_training`이 루프 시작 전 한 번 `model.to(device)`). "cpu"는 기존과
-    동일(무연산 `.to`)해 하위 호환. 평균 손실을 반환."""
+    동일(무연산 `.to`)해 하위 호환. `cache`를 주면 여러 에폭에 걸쳐 같은 `run_ids`를 돌 때
+    npz 재읽기를 생략한다(W7-07, `load_graph` 참고) — `cache=None`(기본)은 기존과 동일.
+    평균 손실을 반환."""
     total, n = 0.0, 0
     norm_dev = _norm_to_device(norm, device)
-    for pair in iter_transition_pairs(graphs_root, run_ids):
+    for pair in iter_transition_pairs(graphs_root, run_ids, cache=cache):
         optimizer.zero_grad()
         node_in, edge_index, edge_in, pos, true_pos_next = _prepare_pair(pair, norm_dev, device)
         disp = model(node_in, edge_index, edge_in)
@@ -155,15 +173,17 @@ def evaluate(
     run_ids: list[str],
     norm: NodeEdgeNorm | None = None,
     device: str = "cpu",
+    cache: dict[Path, dict[str, torch.Tensor]] | None = None,
 ) -> float:
     """`train_one_epoch`과 같은 teacher-forcing 손실을 역전파 없이 계산한다(W4-04,
     `train_main.run_training`이 매 에폭 val 체크포인트 선택에 씀). `model.eval()`로 전환하고
-    끝나면 원래 모드(`training`/`eval`)로 되돌린다."""
+    끝나면 원래 모드(`training`/`eval`)로 되돌린다. `cache`는 `train_one_epoch`과 같은 의미
+    (W7-07) — 보통 train_ids와 같은 dict를 넘겨 공유(둘 다 같은 `graphs_root` 밑 파일)."""
     was_training = model.training
     model.eval()
     norm_dev = _norm_to_device(norm, device)
     total, n = 0.0, 0
-    for pair in iter_transition_pairs(graphs_root, run_ids):
+    for pair in iter_transition_pairs(graphs_root, run_ids, cache=cache):
         node_in, edge_index, edge_in, pos, true_pos_next = _prepare_pair(pair, norm_dev, device)
         disp = model(node_in, edge_index, edge_in)
         pred_pos = pos + disp

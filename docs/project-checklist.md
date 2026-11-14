@@ -531,7 +531,16 @@ W4-06_rollout_vs_baseline.md` "mgn_tuned로 재실행" 절. 후퇴안(최종 프
   `SCAN_FILES`에 추가. `docs/model_card.md`는 아직 없음(W8-03 생성 예정, 생성 시 추가
   필요). 재검사 통과 + 신규 테스트(`test_docs_data_card_is_scanned`) 5 passed. 증거:
   `reports/evidence/W7-06_forbidden_expressions.md`.
-- [ ] W7-07 전체 파이프라인 단계별 실행 시간 측정, 병목 1개 개선
+- [x] W7-07 전체 파이프라인 단계별 실행 시간 측정, 병목 1개 개선 — `run_retrain_demo.py`
+  (실제 champion+ViennaPS+게이트)에 단계별 타이머 추가, 백그라운드 2회 실행이 겹쳐
+  경쟁 오염은 있었으나(둘 다 실제로는 완주, 측정값만 부풀려짐) fine-tune이 전체의
+  ~92%(16229s/17655s)로 압도적 병목임은 구조적으로 안정. 개선: `train/loop.py`에
+  에폭 간 그래프 npz 캐시 추가(`load_graph`/`iter_transition_pairs`/`train_one_epoch`/
+  `evaluate`에 선택적 `cache` 파라미터, 기본값 없으면 기존과 동일) —
+  `retrain/execute.py::fine_tune_fn`, `train/train_main.py::run_training` 양쪽에 적용.
+  손실/가중치 불변 테스트 3건 추가(`test_train_loop.py`, 총 14 passed in 68.00s) +
+  실제 champion/실제 demo 데이터 격리 벤치마크로 6.3% 단축 확인(371.06s → 348.99s,
+  5에폭). 증거: `reports/evidence/W7-07_pipeline_timing.md`.
 - [ ] W7-08 문서·코드 불일치 목록 정리 후 문서 수정
 
 **게이트 G7**: 클린 환경 재현 성공, 테스트 전부 통과, 금지 표현 0건.
