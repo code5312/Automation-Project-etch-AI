@@ -432,10 +432,8 @@ data/raw/<run_id>/
 | `scripts/fuzz_predict.py` | (없음, `etch-serve:0.1` 전용) | `/predict` 이상 입력 100개 퍼징, 5xx 없는지 확인 |
 | `scripts/run_pipeline_smoke.py` | (없음) | 픽스처로 ETL부터 서빙 호출까지 한 번 통과. 실패 시 종료 코드 1 |
 | `scripts/run_gate_negative.py` | (없음, train 환경 필요) | 게이트 부정 테스트 10종(기존 경로 + ADR-0005 신규 경로). `build/gate_negative_report.json` 저장 |
-| `scripts/check_forbidden_expressions.py` | (없음) | `src`, `scripts`, `tests`, `README.md`에서 금지 표현을 검사. 발견 시 종료 코드 1 |
+| `scripts/check_forbidden_expressions.py` | (없음) | `src`, `scripts`, `tests`, `README.md`, `docs/data_card.md`, `docs/model_card.md`에서 금지 표현을 검사. 발견 시 종료 코드 1 |
 | `scripts/regen_ood_w3_12.py` | (없음) | OOD 12건 재생성용 1회성 스크립트. `etch-sim:0.1` 컨테이너 안에서만 실행 |
-
-`scripts/mgn_smoke_test.py`는 초기 스파이크에서 가져온 원본이라 정식 진입점이 아닙니다.
 
 환경변수:
 
