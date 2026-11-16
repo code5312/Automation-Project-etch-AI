@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 from etchpipe.etl.etl import THETA_KEYS, etl_run, load_snapshot, outer_path, to_graph
-from etchpipe.eval.metrics import depth
+from etchpipe.eval.metrics import chamfer_distance, depth
 from etchpipe.train.loop import load_graph
 from etchpipe.train.rollout import (
     lines_from_edge_index,
@@ -211,14 +211,20 @@ def test_rollout_val_error_by_step_reports_each_requested_step(tmp_path: pathlib
     graphs_root = tmp_path / "graphs"
     etl_run(FIXTURES / "r0000", graphs_root / "r0000", THETA_KEYS)
 
-    torch.manual_seed(0)
-    model = ToyNodeMLP()
-    result = rollout_val_error_by_step(model, graphs_root, "r0000", steps=[1, 2, 3], step_min=1.0)
+    model = RecordingZeroModel()
+    captured = []
+    result = rollout_val_error_by_step(
+        model, graphs_root, "r0000", steps=[1, 2, 3], step_min=1.0,
+        record_final_profile=lambda reference, prediction: captured.append((reference, prediction)),
+    )
 
     assert set(result) == {1, 2, 3}
     for s in (1, 2, 3):
         assert set(result[s]) == {"chamfer", "depth_error", "depth_pred", "depth_true"}
         assert result[s]["chamfer"] >= 0.0
+    [(reference, prediction)] = captured
+    assert prediction is not None
+    np.testing.assert_allclose(chamfer_distance(prediction, reference), result[3]["chamfer"])
 
 
 def test_rollout_val_error_by_step_matches_rollout_val_error_at_same_step(
