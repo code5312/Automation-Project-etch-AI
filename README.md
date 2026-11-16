@@ -108,6 +108,29 @@ docker run --rm -v "$(pwd):/app" -w /app etch-serve:0.1 python scripts/run_retra
 
 ---
 
+### 관측 배치로 CPU 재학습 실행
+
+학습·ViennaPS가 포함된 serve 환경에서, ETL이 끝난 관측 10건을 배치 디렉터리로 전달합니다.
+`raw/<recipe>/meta.json`과 `graphs/<recipe>/gNNN.npz`를 함께 둡니다.
+드리프트가 감지되면 `--training-raw`의 별도 드리프트 데이터 60건으로 기존 CPU 루프를 실행합니다.
+학습과 평가 데이터는 관측 배치와 레시피가 겹치지 않아야 하고 공정 설정이 일치해야 합니다.
+
+```bash
+python -m etchpipe.retrain run-batch <observation-dir> --training-raw <drift-raw-dir> \
+  --registry <review-registry> --runs-root <review-runs>
+```
+
+`--registry`의 현재 챔피언 카드와 `--runs-root`의 가중치가 필요합니다. 완료된 배치는 같은
+`--runs-root`에서 다시 입력해도 학습을 중복 실행하지 않습니다. 결과는
+`<review-runs>/retrain/batches/<batch-id>/job.json`에 기록합니다. `baseline.json`과 각
+`attempt-N/profiles.json`은 고정 val 10건의 마지막 단면 좌표와 스텝별 Chamfer를 담고,
+`attempt-N/result.json`은 후보 가중치, 해시, 데이터셋, 게이트 결과를 연결합니다.
+
+기본값은 후보 평가까지입니다. 리뷰용 레지스트리에서 승격 동작을 검증하려면
+`--promote`를 추가합니다. 기존 게이트는 중간 CD에 깊이 값을 사용하며, 관문 C는
+팀 val 40 자료가 필요합니다. 실행 오류나 중단 후 같은 배치를 재처리할 때는 이전 프로세스와
+승격 여부를 확인하고 기존 배치 결과 디렉터리를 보관한 다음 다시 실행합니다.
+
 ## 증거 ①② 재현
 
 정의서 §3의 두 가지 합격 기준을 **이미 실행해서 남긴 증거**와, **직접 재현하는 명령**입니다.
