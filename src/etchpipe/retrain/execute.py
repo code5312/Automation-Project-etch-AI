@@ -220,6 +220,7 @@ def make_gate_fn(
     champion_ckpt: pathlib.Path = CHAMPION_CKPT,
     *,
     record_profiles: Callable[[pathlib.Path | None, dict], None] | None = None,
+    record_gate_progress: Callable[[dict], None] | None = None,
 ):
     """ADR-0005 — 관문 A(결정3, 레시피별 깊이·CD·롤아웃 3조건 통과율) + 물리(ADR-0004
     결정4, 변경 없음) + 관문 C(결정4, 윌콕슨 IoU 회귀·HD95 악화·val 40 재확인) — **관문
@@ -261,6 +262,12 @@ def make_gate_fn(
             pass_rate=gate_cfg["recipe_pass_rate"],
         )
         physics_ok = cand["self_x_total"] == 0
+        if record_gate_progress is not None:
+            record_gate_progress({
+                "gate_a": {"passed": gate_a_ok, **gate_a_detail},
+                "physics": {"passed": physics_ok, "self_intersections": cand["self_x_total"]},
+                "gate_c": "pending" if gate_a_ok and physics_ok else "skipped",
+            })
 
         gate_c_ok, gate_c_detail = True, {}
         if gate_a_ok and physics_ok:

@@ -96,8 +96,15 @@ def _run_cpu(state, checkpoint: Path, norm, job: Path) -> dict:
         path = attempt_dir / "profiles.json" if candidate else job / "baseline.json"
         _write_json(path, profiles)
 
+    def record_gate_progress(progress: dict) -> None:
+        record["gate_progress"] = progress
+        _write_json(attempt_dir / "result.json", record)
+
     tune = make_fine_tune_fn(state, norm, out_root=job / "checkpoints")
-    gate = make_gate_fn(state, checkpoint, record_profiles=record_profiles)
+    gate = make_gate_fn(
+        state, checkpoint, record_profiles=record_profiles,
+        record_gate_progress=record_gate_progress,
+    )
 
     def tune_and_record(champion: Path, config: dict) -> Path:
         nonlocal attempt_dir, record
@@ -120,8 +127,14 @@ def _run_cpu(state, checkpoint: Path, norm, job: Path) -> dict:
         try:
             result = gate(candidate)
         except Exception as exc:
+            progress = record.get("gate_progress")
+            if progress is not None and progress["gate_c"] == "pending":
+                progress["gate_c"] = "error"
             _write_json(attempt_dir / "result.json", {**record, "gate_error": str(exc)})
             raise
+        progress = record.get("gate_progress")
+        if progress is not None and progress["gate_c"] == "pending":
+            progress["gate_c"] = "evaluated"
         record["gate"] = result
         _write_json(attempt_dir / "result.json", record)
         attempts.append(record)

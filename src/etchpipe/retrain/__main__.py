@@ -12,22 +12,32 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m etchpipe.retrain")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("run")
-    batch = sub.add_parser("run-batch", help="Evaluate one ready observation batch")
-    batch.add_argument("intake", type=Path, help="Directory containing raw/ and graphs/")
-    batch.add_argument("--training-raw", type=Path, help="Defaults to <intake>/training")
-    batch.add_argument("--registry", type=Path, default=REPO_ROOT / "registry")
-    batch.add_argument("--runs-root", type=Path, default=REPO_ROOT / "runs")
-    batch.add_argument("--promote", action="store_true", help="Register a gate-passing candidate")
+    for command, help_text, intake_help in (
+        ("run-batch", "Evaluate one ready observation batch", "Directory with raw/ and graphs/"),
+        ("etl-batch", "Convert a raw observation batch, then evaluate it", "Directory with raw/"),
+    ):
+        batch = sub.add_parser(command, help=help_text)
+        batch.add_argument("intake", type=Path, help=intake_help)
+        batch.add_argument("--training-raw", type=Path, help="Defaults to <intake>/training")
+        batch.add_argument("--registry", type=Path, default=REPO_ROOT / "registry")
+        batch.add_argument("--runs-root", type=Path, default=REPO_ROOT / "runs")
+        batch.add_argument(
+            "--promote", action="store_true", help="Register a gate-passing candidate",
+        )
     args = parser.parse_args()
 
     if args.command == "run":
         from etchpipe.retrain.execute import run
 
         return run()
-    if args.command == "run-batch":
+    if args.command in {"run-batch", "etl-batch"}:
         from etchpipe.retrain.batch import run_batch
 
         try:
+            if args.command == "etl-batch":
+                from etchpipe.retrain.intake import prepare_observation
+
+                prepare_observation(args.intake)
             result = run_batch(
                 args.intake, training_raw=args.training_raw or args.intake / "training",
                 registry_root=args.registry, runs_root=args.runs_root, promote=args.promote,

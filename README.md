@@ -110,13 +110,16 @@ docker run --rm -v "$(pwd):/app" -w /app etch-serve:0.1 python scripts/run_retra
 
 ### 관측 배치로 CPU 재학습 실행
 
-학습·ViennaPS가 포함된 serve 환경에서, ETL이 끝난 관측 10건을 배치 디렉터리로 전달합니다.
-`raw/<recipe>/meta.json`과 `graphs/<recipe>/gNNN.npz`를 함께 둡니다.
+학습·ViennaPS가 포함된 serve 환경에서 관측 10건의
+`raw/<recipe>/meta.json`과 `raw/<recipe>/snapshots/tNNN.vtp`가 모두 준비되면 실행합니다.
+`etl-batch`는 10건 전체를 변환한 뒤 `graphs/ready.json`과 그래프를 함께 게시하고
+자동으로 드리프트 판정과 재학습 진입점을 호출합니다. 동일 배치를 다시 실행하면
+이미 게시된 ETL 결과를 재사용합니다. 외부에서 변환을 끝낸 배치는 `run-batch`로 전달합니다.
 드리프트가 감지되면 `--training-raw`의 별도 드리프트 데이터 60건으로 기존 CPU 루프를 실행합니다.
 학습과 평가 데이터는 관측 배치와 레시피가 겹치지 않아야 하고 공정 설정이 일치해야 합니다.
 
 ```bash
-python -m etchpipe.retrain run-batch <observation-dir> --training-raw <drift-raw-dir> \
+python -m etchpipe.retrain etl-batch <observation-dir> --training-raw <drift-raw-dir> \
   --registry <review-registry> --runs-root <review-runs>
 ```
 

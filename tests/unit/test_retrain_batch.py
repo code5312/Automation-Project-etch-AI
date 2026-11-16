@@ -113,7 +113,7 @@ def test_true_runs_existing_loop_and_records_all_attempts(setup_batch, monkeypat
         assert n_train == 100
         state.dataset_hash = "expanded"
 
-    def gate_for(state, champion, *, record_profiles):
+    def gate_for(state, champion, *, record_profiles, record_gate_progress):
         assert champion == s.checkpoint
         profiles = {
             rid: {
@@ -127,6 +127,9 @@ def test_true_runs_existing_loop_and_records_all_attempts(setup_batch, monkeypat
         def gate(ckpt):
             record_profiles(ckpt, profiles)
             passed = ckpt.read_bytes() == b"2"
+            record_gate_progress({
+                "gate_a": {"n": 20}, "gate_c": "pending" if passed else "skipped",
+            })
             return {"passed": passed, "exit_code": 0 if passed else 1, "reasons": [],
                     "reference_metrics": {"gate_a": {"n": 20}, "gate_c": {}}}
 
@@ -150,6 +153,7 @@ def test_true_runs_existing_loop_and_records_all_attempts(setup_batch, monkeypat
     assert [record["dataset_hash"] for record in attempts] == ["first", "expanded"]
     assert [record["gate"]["passed"] for record in attempts] == [False, True]
     for i, attempt in zip(calls, attempts, strict=True):
+        assert attempt["gate_progress"]["gate_a"]["n"] == 20
         assert attempt["candidate_sha256"] == sha256_file(attempt["candidate"])
         profiles = json.loads((directory / f"attempt-{i}" / "profiles.json").read_text())
         assert profiles.keys() == set(eval_ids)
@@ -196,3 +200,43 @@ def test_unchanged_failed_batch_is_not_automatically_retrained(setup_batch, monk
     prepare.assert_called_once()
     train.assert_not_called()
     assert s.registry.current_champion() == "current_model"
+
+
+def test_gate_c_error_keeps_completed_gate_results_and_profiles(setup_batch, monkeypatch):
+    s = setup_batch
+    job = s.intake / "validation-run"
+    job.mkdir()
+    val_ids = [f"drift{i:04d}" for i in range(40, 50)]
+    eval_ids = [f"drift{i:04d}" for i in range(40, 60)]
+    state = SimpleNamespace(
+        raw_dir=s.intake / "raw", graphs_root=s.intake / "graphs",
+        dataset_hash="data", splits={"val": val_ids}, eval_ids=lambda: eval_ids,
+    )
+    candidate = job / "candidate.pt"
+    candidate.write_bytes(b"candidate")
+
+    def evaluated(*args, **kwargs):
+        return {
+            "depth_pred": [10.0] * 20, "depth_true": [10.0] * 20,
+            "cd_pred": [5.0] * 20, "cd_true": [5.0] * 20,
+            "rollout_errors": [[0.1]] * 20, "self_x_total": 0,
+            "profiles": {rid: {"time_min": 1.0} for rid in val_ids},
+        }
+
+    monkeypatch.setattr(execute, "_eval_recipes", evaluated)
+    monkeypatch.setattr(
+        execute, "_val40_run_ids", Mock(side_effect=FileNotFoundError("val40 missing")),
+    )
+    monkeypatch.setattr(
+        execute, "make_fine_tune_fn", lambda *args, **kwargs: lambda *args: candidate,
+    )
+    with pytest.raises(FileNotFoundError, match="val40 missing"):
+        batch._run_cpu(state, s.checkpoint, "norm", job)
+    attempt = job / "attempt-1"
+    saved = json.loads((attempt / "result.json").read_text())
+    assert saved["gate_progress"]["gate_a"]["n_passed"] == 20
+    assert saved["gate_progress"]["physics"]["passed"] is True
+    assert saved["gate_progress"]["gate_c"] == "error"
+    assert saved["gate_error"] == "val40 missing"
+    assert len(json.loads((attempt / "profiles.json").read_text())) == 10
+    assert not (job / "attempt-2").exists()
