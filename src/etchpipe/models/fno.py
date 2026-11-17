@@ -16,12 +16,21 @@
 
 import json
 import pathlib
-import sys
+from importlib.util import module_from_spec, spec_from_file_location
 
 import numpy as np
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_RUN_DIR = REPO_ROOT / "runs" / "fno_tuned"
+
+
+def _load_module(path: pathlib.Path):
+    spec = spec_from_file_location(f"etchpipe_fno_{path.stem}", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load FNO module: {path.name}")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class FNOModel:
@@ -43,15 +52,9 @@ class FNOModel:
     def _ensure_loaded(self) -> None:
         if self._model is not None:
             return
-        run_dir_str = str(self.run_dir)
-        if run_dir_str not in sys.path:
-            sys.path.insert(0, run_dir_str)
-        import inference as fno_inference  # type: ignore[import-not-found]
-        import preprocess as fno_preprocess  # type: ignore[import-not-found]
-
-        self._inference = fno_inference
-        self._preprocess = fno_preprocess
-        self._model, self._cfg = fno_inference.load(run_dir_str, device=self._device)
+        self._inference = _load_module(self.run_dir / "inference.py")
+        self._preprocess = _load_module(self.run_dir / "preprocess.py")
+        self._model, self._cfg = self._inference.load(str(self.run_dir), device=self._device)
 
     @property
     def cfg(self) -> dict:

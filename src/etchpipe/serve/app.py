@@ -86,6 +86,7 @@ class Recipe(BaseModel):
     ion_exponent: float = Field(gt=0, le=10_000.0, allow_inf_nan=False)
     mask_width: float = Field(gt=0, le=25.0, allow_inf_nan=False)
     mask_height: float = Field(gt=0, le=25.0, allow_inf_nan=False)
+    substrate_a_ie: float | None = Field(default=None, gt=0, allow_inf_nan=False)
 
 
 class PredictRequest(BaseModel):
@@ -232,7 +233,11 @@ def model_info(_: None = Depends(check_api_key)) -> dict:
 
 def _run_predict(req: PredictRequest) -> PredictResponse:
     try:
-        raw_results = [predict_recipe(recipe.model_dump(), req.times) for recipe in req.recipes]
+        champion = load_champion()
+        raw_results = [
+            predict_recipe(recipe.model_dump(exclude_none=True), req.times, champion=champion)
+            for recipe in req.recipes
+        ]
     except ChampionUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
