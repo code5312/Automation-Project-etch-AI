@@ -30,9 +30,9 @@ _FAKE_CARD = {
 _FAKE_CHAMPION = {"model_id": "fake-champion", "card": _FAKE_CARD}
 
 
-def _fake_predict_recipe(theta_dict: dict, times: list[float]) -> dict:
+def _fake_predict_recipe(theta_dict: dict, times: list[float], *, champion: dict) -> dict:
     return {
-        "model_version": "fake-champion",
+        "model_version": champion["model_id"],
         "profiles": [{"t": t, "points": [[0.0, 0.0]]} for t in times],
         "cd": 1.0,
         "depth": 2.0,
@@ -85,7 +85,15 @@ def test_predict_without_api_key_is_401() -> None:
 
 
 def test_predict_with_api_key_returns_matching_shape(monkeypatch) -> None:
-    monkeypatch.setattr("etchpipe.serve.app.predict_recipe", _fake_predict_recipe)
+    available = [_FAKE_CHAMPION, dict(_FAKE_CHAMPION, model_id="new-champion")]
+    seen = []
+
+    def track_prediction(theta_dict, times, *, champion):
+        seen.append(champion["model_id"])
+        return _fake_predict_recipe(theta_dict, times, champion=champion)
+
+    monkeypatch.setattr("etchpipe.serve.app.load_champion", lambda: available.pop(0))
+    monkeypatch.setattr("etchpipe.serve.app.predict_recipe", track_prediction)
     resp = client.post(
         "/predict",
         json={"recipes": [_RECIPE, _RECIPE], "times": [0.25, 0.5]},
@@ -97,13 +105,15 @@ def test_predict_with_api_key_returns_matching_shape(monkeypatch) -> None:
     assert len(body["results"]) == 2
     assert len(body["results"][0]["profiles"]) == 2
     assert body["results"][0]["in_range"] is True
+    assert seen == ["fake-champion", "fake-champion"]
+    assert [champion["model_id"] for champion in available] == ["new-champion"]
 
 
 def test_predict_returns_503_when_champion_unavailable(monkeypatch) -> None:
-    def _raise(theta_dict, times):
+    def _raise():
         raise ChampionUnavailable("no champion")
 
-    monkeypatch.setattr("etchpipe.serve.app.predict_recipe", _raise)
+    monkeypatch.setattr("etchpipe.serve.app.load_champion", _raise)
     resp = client.post(
         "/predict", json={"recipes": [_RECIPE], "times": [0.5]}, headers={"x-api-key": API_KEY}
     )
@@ -219,9 +229,10 @@ def test_predict_nan_time_is_422() -> None:
 def test_predict_unexpected_inference_error_is_422_not_500(monkeypatch) -> None:
     # W6-09: Field 상한을 다 통과했지만 추론 단계에서만 드러나는 오류는 422로 돌리고
     # 절대 5xx를 내지 않는다. 에러 메시지에 경로·스택이 안 보여야 한다.
-    def _boom(theta_dict, times):
+    def _boom(theta_dict, times, *, champion):
         raise RuntimeError("/app/some/internal/path.py line 42 boom")
 
+    monkeypatch.setattr("etchpipe.serve.app.load_champion", lambda: _FAKE_CHAMPION)
     monkeypatch.setattr("etchpipe.serve.app.predict_recipe", _boom)
     resp = client.post(
         "/predict", json={"recipes": [_RECIPE], "times": [0.5]}, headers={"x-api-key": API_KEY}
@@ -293,6 +304,7 @@ def test_rate_limit_middleware_tracks_separate_keys_independently() -> None:
 
 
 def test_api_predict_without_api_key_returns_matching_shape(monkeypatch) -> None:
+    monkeypatch.setattr("etchpipe.serve.app.load_champion", lambda: _FAKE_CHAMPION)
     monkeypatch.setattr("etchpipe.serve.app.predict_recipe", _fake_predict_recipe)
     resp = client.post("/api/predict", json={"recipes": [_RECIPE], "times": [0.5]})
     assert resp.status_code == 200

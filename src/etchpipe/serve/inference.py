@@ -25,10 +25,12 @@ import logging
 import math
 import pathlib
 import tempfile
+from threading import RLock
 from typing import TYPE_CHECKING
 
 import numpy as np
 
+from etchpipe.registry.artifacts import model_family, resolve_artifact, verify_bundle
 from etchpipe.registry.registry import Registry
 
 if TYPE_CHECKING:
@@ -49,15 +51,22 @@ XR = (-15.0, 15.0)
 # ::run()`이 실제로 쓰는 경로 규칙(`runs/retrain/<model_id>/model.pt`)으로 찾는다
 # [확인, 2026-11-13 — W6-05/06 실행으로 champion이 `mgn_retrain_20261112T212130`로
 # 바뀐 뒤 이 매핑에 없어서 `/predict`가 503을 내던 걸 발견·수정].
-_ARTIFACT_PATHS = {"mgn_tuned_ep2": REPO_ROOT / "runs" / "mgn_tuned" / "model.pt"}
-_RETRAIN_RUNS_ROOT = REPO_ROOT / "runs" / "retrain"
+_RUNS_ROOT = REPO_ROOT / "runs"
+_ARTIFACT_PATHS = {"mgn_tuned_ep2": _RUNS_ROOT / "mgn_tuned" / "model.pt"}
+_RETRAIN_RUNS_ROOT = _RUNS_ROOT / "retrain"
+
+
+def artifact_path_for(model_id: str, runs_root: pathlib.Path | None = None) -> pathlib.Path:
+    legacy = _ARTIFACT_PATHS.get(model_id)
+    if legacy is not None:
+        return legacy if runs_root is None else runs_root / legacy.relative_to(_RUNS_ROOT)
+    retrain_root = _RETRAIN_RUNS_ROOT if runs_root is None else runs_root / "retrain"
+    return retrain_root / model_id / "model.pt"
 
 
 def _artifact_path_for(model_id: str) -> pathlib.Path | None:
-    if model_id in _ARTIFACT_PATHS:
-        return _ARTIFACT_PATHS[model_id]
-    candidate = _RETRAIN_RUNS_ROOT / model_id / "model.pt"
-    return candidate if candidate.exists() else None
+    candidate = artifact_path_for(model_id)
+    return candidate if model_id in _ARTIFACT_PATHS or candidate.exists() else None
 
 
 class ChampionUnavailable(RuntimeError):
@@ -65,12 +74,14 @@ class ChampionUnavailable(RuntimeError):
 
 
 _cache: dict[str, dict] = {}
+_champion_lock = RLock()
 
 
 def _validate_card(card: dict) -> None:
     from etchpipe.etl.etl import THETA_KEYS
 
-    for key in THETA_KEYS:
+    keys = THETA_KEYS if model_family(card) == "mgn" else [*THETA_KEYS, "substrate_a_ie"]
+    for key in keys:
         bounds = card["valid_range"][key]
         lower, upper = bounds["min"], bounds["max"]
         if any(
@@ -86,41 +97,52 @@ def _validate_card(card: dict) -> None:
 
 
 def load_champion() -> dict:
-    """프로세스당 한 번만 로드하고 캐시(서빙은 추론마다 체크포인트를 다시 읽지 않는다)."""
-    if "champion" in _cache:
-        return _cache["champion"]
+    """Refresh the loaded model when the registry points at another champion."""
+    with _champion_lock:
+        return _load_current_champion()
+
+
+def _load_current_champion() -> dict:
     reg = Registry(REGISTRY_ROOT)
     try:
         model_id = reg.current_champion()
         if not model_id:
             raise ChampionUnavailable("레지스트리에 등록된 champion이 없습니다.")
-        artifact_path = _artifact_path_for(model_id)
+        cached = _cache.get("champion")
+        if cached is not None and cached["model_id"] == model_id:
+            return cached
+        card = reg.load_card(model_id)
+        family = model_family(card)
+        artifact_path = (resolve_artifact(model_id, card, _RUNS_ROOT) if family == "fno"
+                         else _artifact_path_for(model_id))
         if artifact_path is None or not artifact_path.is_file():
             raise ChampionUnavailable("챔피언 체크포인트를 찾을 수 없습니다.")
-        if not reg.verify_artifact(model_id, artifact_path):
-            raise ChampionUnavailable(f"아티팩트 무결성 검증 실패: {model_id}")
-        card = reg.load_card(model_id)
+        try:
+            verify_bundle(reg, model_id, card, artifact_path)
+        except ValueError as exc:
+            raise ChampionUnavailable(str(exc)) from exc
         _validate_card(card)
-        from etchpipe.eval.eval import load_model_a  # 지연 임포트(torch/physicsnemo)
+        if family == "fno":
+            from etchpipe.serve.fno_inference import load_fno
 
-        model, _note, norm = load_model_a(artifact_path)
+            model, norm = load_fno(artifact_path.parent, card), None
+        else:
+            from etchpipe.eval.eval import load_model_a
+
+            model, _note, norm = load_model_a(artifact_path)
     except ChampionUnavailable:
         raise
     except Exception as exc:
         logger.exception("Failed to load the registered champion")
         raise ChampionUnavailable("챔피언 모델을 불러올 수 없습니다.") from exc
-    _cache["champion"] = {"model_id": model_id, "model": model, "norm": norm, "card": card}
+    _cache["champion"] = {
+        "model_id": model_id, "model_family": family, "model": model, "norm": norm, "card": card
+    }
     return _cache["champion"]
 
 
-def build_initial_graph(
-    mask_width: float, mask_height: float, theta: np.ndarray
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """`ps.MakeTrench`로 t=0 표면을 만들고 `etl.to_graph`로 그래프화."""
-    import torch
+def write_initial_surface(path: pathlib.Path, mask_width: float, mask_height: float) -> None:
     import viennaps as ps  # 지연 임포트(모듈 docstring 참고)
-
-    from etchpipe.etl.etl import load_snapshot, to_graph  # 지연 임포트(pyvista/shapely/scipy)
 
     ps.Length.setUnit("um")
     ps.Time.setUnit("min")
@@ -129,9 +151,20 @@ def build_initial_graph(
         domain, trenchWidth=mask_width, trenchDepth=0.0,
         maskHeight=mask_height, maskTaperAngle=10,
     ).apply()
+    domain.saveSurfaceMesh(str(path), addInterfaces=True)
+
+
+def build_initial_graph(
+    mask_width: float, mask_height: float, theta: np.ndarray
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """`ps.MakeTrench`로 t=0 표면을 만들고 `etl.to_graph`로 그래프화."""
+    import torch
+
+    from etchpipe.etl.etl import load_snapshot, to_graph
+
     with tempfile.TemporaryDirectory() as tmp:
         path = pathlib.Path(tmp) / "t000.vtp"
-        domain.saveSurfaceMesh(str(path), addInterfaces=True)
+        write_initial_surface(path, mask_width, mask_height)
         p, lines, mid, nv = load_snapshot(path)
     node, ei, edge = to_graph(p, lines, mid, nv, theta, t=0.0)
     return (
@@ -143,7 +176,9 @@ def is_in_range(theta_dict: dict[str, float], valid_range: dict[str, dict[str, f
     return all(valid_range[k]["min"] <= v <= valid_range[k]["max"] for k, v in theta_dict.items())
 
 
-def predict_recipe(theta_dict: dict[str, float], times: list[float]) -> dict:
+def predict_recipe(
+    theta_dict: dict[str, float], times: list[float], *, champion: dict | None = None
+) -> dict:
     """체크리스트 W6-08: 레시피 하나 + 요청 시간들 → 프로파일(시간별 표면선) + cd/depth/
     taper_deg(마지막 요청 시간 기준) + in_range(경고만, 거부 안 함 — DOC-01).
 
@@ -151,12 +186,18 @@ def predict_recipe(theta_dict: dict[str, float], times: list[float]) -> dict:
     모델은 `step_min`(1분) 단위로만 학습됐다]: 각 요청 시간을 가장 가까운 정수
     스텝(`round(t/STEP_MIN)`, 최소 1)으로 반올림하고, `MAX_STEPS`(학습 데이터 상한)를
     넘으면 잘라낸다(`clamped=True`로 표시) — 분 단위 보간은 검증된 적 없어 하지 않는다."""
+    if champion is None:
+        champion = load_champion()
+    if champion.get("model_family") == "fno":
+        from etchpipe.serve.fno_inference import predict_fno
+
+        return predict_fno(champion, theta_dict, times)
     from etchpipe.etl.etl import THETA_KEYS, auto_yr, outer_path, remove_self_crossing_loops
     from etchpipe.eval.metrics import cd_profile, depth, mask_from_points, taper_angle_deg
     from etchpipe.train.rollout import lines_from_edge_index, rollout  # 지연 임포트(torch)
 
-    champion = load_champion()
     model, norm, card = champion["model"], champion["norm"], champion["card"]
+    theta_dict = {key: theta_dict[key] for key in THETA_KEYS}
 
     theta = np.array([theta_dict[k] for k in THETA_KEYS], dtype=np.float32)
     node0, edge_index, edge0, pos0 = build_initial_graph(
