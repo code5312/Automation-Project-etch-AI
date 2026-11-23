@@ -646,6 +646,39 @@ GitHub Actions로 확인됨.
 작업 — 명령·대본은 준비돼 있음). "모두 있다"를 성급히 충족으로 적지 않음. 근거:
 `reports/evidence/W8-buffer_backlog_and_gate8.md`.
 
+## 9주차: v1.1 — 자동화 보강·데이터 관리 (2026-11-23 착수)
+
+v1.0 이후 코드 조사로 확인된 구체적 공백 6건. MSA 등 구조 전환은 하지 않음(서빙
+1개만 네트워크 서비스고 나머지는 파일 연결 배치 파이프라인이라 서비스 분리로
+해결될 문제가 아님, 2026-11-23 판단). 인터페이스를 바꾸는 항목은 ADR 선행(CLAUDE.md
+규칙 6), 운영 스크립트만 추가하는 항목은 ADR 없이 바로 진행.
+
+- [ ] W9-01 데이터 생애주기 정리 스크립트 — 실패한 재학습 시도 체크포인트
+  (`runs/retrain/attemptN_*`, `history.jsonl`엔 기록되지만 승격 안 되면 디스크에
+  고아로 남음, `registry.py::register` 참조) 및 드리프트 확장으로 쌓이는
+  `data/drift/processed/<hash>/`를 정리. 인터페이스 변경 없음(레지스트리 기존
+  API만 읽음), ADR 불필요.
+- [ ] W9-02 데이터 버전·백업 정책 ADR — 외부 배포본(GitHub Release `data-v1-n400`,
+  Hugging Face) 재업로드 기준을 사전에 문서화(W8-03에서 사용자가 재업로드
+  결정→반전한 사례 재발 방지).
+- [ ] W9-03 ADR + 구현: 재학습 루프 베스트 체크포인트 선택 — `retrain/execute.py::
+  make_fine_tune_fn`의 `fine_tune_fn`이 마지막 에폭 가중치를 무조건 저장하는 문제
+  (검증 손실 기반 선택 없음, `train_main.py::run_training()`엔 이미 있는 패턴).
+  데모에서 attempt 3(에폭 10~15)의 깊이오차가 attempt 1보다 악화된 현상의 원인으로
+  2026-11-17 진단됨.
+- [ ] W9-04 ADR + 구현: 재학습 루프 GPU 지원 — `fine_tune_fn`의 하드코딩된
+  `device="cpu"`(`execute.py:130`)를 파라미터화, `run()`/`run_retrain_demo.py`까지
+  반영. 팀원 실측(RTX A5000, 92.9배, `reports/evidence/W8-09_gpu_feasibility.md`)이
+  근거.
+- [ ] W9-05 ADR(팀 합의 필요): 재학습 시도 간 누적 학습 여부 — 현재
+  `retrain/loop.py::run_retrain_loop`는 매 시도가 원본 `champion_ckpt`에서 재시작
+  (이전 시도 이어받지 않음). 설계 의도(ADR-0002 에스컬레이션 단계 독립 가정)인지
+  재검토 — 바꿀지 유지할지 합의 전까지 구현 보류.
+- [ ] W9-06 ADR + 구현: 드리프트 감지→재학습 자동 트리거 — 지금은
+  `monitor.py::check_drift()`가 판정만 하고 사람이 수동으로 재학습을 실행
+  (`.github/workflows/retrain-demo.yml`도 `workflow_dispatch`만). 스케줄 워크플로우로
+  `check_drift()` 결과를 `retrain.execute.run()` 호출에 연결.
+
 ---
 
 ## 주간 루틴
