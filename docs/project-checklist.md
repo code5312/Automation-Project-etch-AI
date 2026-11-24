@@ -664,9 +664,14 @@ v1.0 이후 코드 조사로 확인된 구체적 공백 6건. MSA 등 구조 전
   고아는 0건(expand_train 아직 한 번도 안 불림). **`--apply` 실제 삭제 완료
   (2026-11-24, 사용자 확인 후)** — attempt 고아 1건 제거, 레지스트리/챔피언 포인터
   영향 없음 확인. 증거: `reports/evidence/W9-01_cleanup_script.md`.
-- [ ] W9-02 데이터 버전·백업 정책 ADR — 외부 배포본(GitHub Release `data-v1-n400`,
+- [x] W9-02 데이터 버전·백업 정책 ADR — 외부 배포본(GitHub Release `data-v1-n400`,
   Hugging Face) 재업로드 기준을 사전에 문서화(W8-03에서 사용자가 재업로드
-  결정→반전한 사례 재발 방지).
+  결정→반전한 사례 재발 방지). **ADR-0007 승인 완료** — 재업로드 검토 트리거 3종
+  (물리적 무결성 버그·split 전체 영향·게이트 판정 영향), 외부 태그 불변+신규 버전
+  추가 방식, raw 재생성 시 로컬 백업, 실행은 항상 사용자 직접(Claude는 판단·제안만).
+  코드 변경 없음(정책 문서), `docs/data_card.md` §4에 참조 추가. 증거:
+  `reports/evidence/W9-02_data_version_backup_policy.md`,
+  `docs/adr/0007-data-version-backup-policy.md`.
 - [x] W9-03 ADR + 구현: 재학습 루프 베스트 체크포인트 선택 — `retrain/execute.py::
   make_fine_tune_fn`의 `fine_tune_fn`이 마지막 에폭 가중치를 무조건 저장하는 문제
   (검증 손실 기반 선택 없음, `train_main.py::run_training()`엔 이미 있는 패턴).
