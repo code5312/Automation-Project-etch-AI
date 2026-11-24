@@ -7,13 +7,15 @@ import sys
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m etchpipe.retrain")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("run")
+    run_parser = sub.add_parser("run")
+    # ADR-0008: fine-tune 단계만 GPU로 돌릴 수 있게(게이트 평가는 범위 제외, CPU 고정).
+    run_parser.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
     args = parser.parse_args()
 
     if args.command == "run":
         from etchpipe.retrain.execute import run
 
-        return run()
+        return run(device=args.device)
     return 1
 
 

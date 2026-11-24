@@ -44,18 +44,27 @@ def _fake_norm() -> NodeEdgeNorm:
 
 
 def _patch_training_fns(
-    monkeypatch: pytest.MonkeyPatch, model: _FakeModel, val_losses: list[float]
+    monkeypatch: pytest.MonkeyPatch,
+    model: _FakeModel,
+    val_losses: list[float],
+    seen_devices: list[str] | None = None,
 ) -> None:
     def fake_train_one_epoch(
         model, optimizer, graphs_root, run_ids, norm=None, device="cpu", cache=None
     ):
+        if seen_devices is not None:
+            seen_devices.append(device)
         model.epoch_marker += 1
         return 0.0
 
     def fake_evaluate(model, graphs_root, run_ids, norm=None, device="cpu", cache=None):
+        if seen_devices is not None:
+            seen_devices.append(device)
         return val_losses[model.epoch_marker]
 
-    def fake_load_model_a(ckpt_path):
+    def fake_load_model_a(ckpt_path, device="cpu"):
+        if seen_devices is not None:
+            seen_devices.append(device)
         return model, "fake", None
 
     monkeypatch.setattr(eval_mod, "load_model_a", fake_load_model_a)
@@ -111,3 +120,29 @@ def test_fine_tune_fn_falls_back_to_last_epoch_when_no_val(
     metrics = json.loads((ckpt_path.parent / "metrics.json").read_text())
     assert metrics["best_val_loss"] is None
     assert "val_loss" not in metrics["epochs"][0]
+
+
+def test_fine_tune_fn_threads_device_to_load_train_evaluate(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-0008: `device`가 `load_model_a`/`train_one_epoch`/`evaluate` 세 호출
+    전부에 그대로 전달되는지 확인 — 실제 GPU 없이도(로컬 CUDA 미설치, CLAUDE.md
+    "학습·추론 CPU만") 배선 자체는 검증 가능. 저장된 체크포인트는 ADR-0008 결정대로
+    device와 무관하게 CPU 텐서여야 한다."""
+    val_losses = [0.5, 0.3]
+    model = _FakeModel()
+    seen_devices: list[str] = []
+    _patch_training_fns(monkeypatch, model, val_losses, seen_devices=seen_devices)
+
+    state = types.SimpleNamespace(
+        graphs_root=tmp_path, splits={"train": ["dummy_train"], "val": ["dummy_val"]}
+    )
+    fine_tune_fn = make_fine_tune_fn(state, _fake_norm(), out_root=tmp_path, device="cuda")
+
+    ckpt_path = fine_tune_fn(
+        pathlib.Path("fake_champion.pt"), {"attempt": 1, "epochs": (2, 2), "lr_mult": 1.0}
+    )
+
+    assert seen_devices == ["cuda"] + ["cuda"] * 2 * 2  # load 1회 + (train+evaluate)*2에폭
+    saved = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+    assert saved["state_dict"]["marker"].device.type == "cpu"

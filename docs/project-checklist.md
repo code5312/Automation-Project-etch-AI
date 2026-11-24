@@ -685,10 +685,18 @@ v1.0 이후 코드 조사로 확인된 구체적 공백 6건. MSA 등 구조 전
   Docker 환경에서 재확인 필요). 증거:
   `reports/evidence/W9-03_best_checkpoint_selection.md`,
   `docs/adr/0006-retrain-loop-best-checkpoint-selection.md`.
-- [ ] W9-04 ADR + 구현: 재학습 루프 GPU 지원 — `fine_tune_fn`의 하드코딩된
+- [x] W9-04 ADR + 구현: 재학습 루프 GPU 지원 — `fine_tune_fn`의 하드코딩된
   `device="cpu"`(`execute.py:130`)를 파라미터화, `run()`/`run_retrain_demo.py`까지
   반영. 팀원 실측(RTX A5000, 92.9배, `reports/evidence/W8-09_gpu_feasibility.md`)이
-  근거.
+  근거. **ADR-0008 승인·구현 완료** — `make_fine_tune_fn(..., device="cpu")`
+  선택 인자 추가(기본값으로 기존 동작 불변), `load_model_a`/`train_one_epoch`/
+  `evaluate`에 그대로 전달, 체크포인트는 device와 무관하게 항상 CPU 텐서로 저장.
+  `--device {cpu,cuda}` CLI 플래그(`__main__.py`), `DEVICE` 환경변수(`run_retrain_demo.py`,
+  CI 워크플로우는 GPU 없는 러너라 변경 없음). 게이트 평가 경로는 범위 제외(CPU 고정
+  유지). 단위테스트 3건(배선 검증 포함) PASS, ruff 클린. **실제 GPU 호스트 통합
+  실행은 미확인**(로컬 GPU 없음, Docker 데몬 미기동 — GPU 환경에서 재확인 필요).
+  증거: `reports/evidence/W9-04_retrain_gpu_device.md`,
+  `docs/adr/0008-retrain-loop-gpu-device-param.md`.
 - [ ] W9-05 ADR(팀 합의 필요): 재학습 시도 간 누적 학습 여부 — 현재
   `retrain/loop.py::run_retrain_loop`는 매 시도가 원본 `champion_ckpt`에서 재시작
   (이전 시도 이어받지 않음). 설계 의도(ADR-0002 에스컬레이션 단계 독립 가정)인지

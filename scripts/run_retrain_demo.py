@@ -10,6 +10,8 @@ production `registry/`에는 **쓰지 않는다**(데모 산출물은 전부 `bu
 
 사용: PYTHONPATH=src python scripts/run_retrain_demo.py
 환경변수로 크기 조정 가능(모두 선택): N_TRAIN, N_VAL, N_GOLDEN_DRIFT (기본 2/1/1)
+ADR-0008: DEVICE(기본 "cpu", "cuda"도 가능) — fine-tune 단계에만 적용, 게이트 평가는
+CPU 고정(범위 제외). CI(`retrain-demo.yml`)는 GPU 없는 러너라 이 변수를 쓰지 않는다.
 출력: build/retrain_demo/result.json
 """
 
@@ -75,6 +77,7 @@ def main() -> int:
     n_train = int(os.environ.get("N_TRAIN", "2"))
     n_val = int(os.environ.get("N_VAL", "1"))
     n_golden_drift = int(os.environ.get("N_GOLDEN_DRIFT", "1"))
+    device = os.environ.get("DEVICE", "cpu")
     raw_dir = DEMO_ROOT / "raw"
     pipeline_t0 = time.time()
 
@@ -117,7 +120,7 @@ def main() -> int:
     result = run_retrain_loop(
         CHAMPION_CKPT,
         _timed(
-            make_fine_tune_fn(state, champion_norm, out_root=DEMO_ROOT / "runs"),
+            make_fine_tune_fn(state, champion_norm, out_root=DEMO_ROOT / "runs", device=device),
             fine_tune_sec_by_attempt,
         ),
         _timed(make_gate_fn(state), gate_sec_by_attempt),
@@ -139,6 +142,7 @@ def main() -> int:
         "timestamp": time.strftime("%Y%m%dT%H%M%S"),
         "note": "[제안] 소규모 데모 — registry에 승격하지 않음, 실제 증거는 W6-06 참고",
         "n_recipes": {"train": n_train, "val": n_val, "golden_drift": n_golden_drift},
+        "device": device,
         "dataset_hash": state.dataset_hash,
         "promoted": result["promoted"],
         "timings": timings,

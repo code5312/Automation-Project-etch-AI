@@ -106,12 +106,21 @@ class DriftState:
         return n_more
 
 
-def make_fine_tune_fn(state: DriftState, fallback_norm, out_root: pathlib.Path = RETRAIN_RUNS_ROOT):
+def make_fine_tune_fn(
+    state: DriftState,
+    fallback_norm,
+    out_root: pathlib.Path = RETRAIN_RUNS_ROOT,
+    device: str = "cpu",
+):
+    """ADR-0008: `device`("cpu"/"cuda")는 `load_model_a`/`train_one_epoch`/`evaluate`로
+    그대로 전달한다 — 기본값 "cpu"는 전과 100% 동일. 체크포인트는 어느 device로
+    학습했든 항상 CPU 텐서로 저장(아래 `fine_tune_fn` 끝 부분)."""
+
     def fine_tune_fn(champion_ckpt: pathlib.Path, cfg: dict) -> pathlib.Path:
         from etchpipe.eval.eval import load_model_a
         from etchpipe.train.loop import evaluate, train_one_epoch
 
-        model, _note, ckpt_norm = load_model_a(champion_ckpt)
+        model, _note, ckpt_norm = load_model_a(champion_ckpt, device=device)
         norm = ckpt_norm or fallback_norm
         model.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=BASE_LR * cfg["lr_mult"])
@@ -134,23 +143,29 @@ def make_fine_tune_fn(state: DriftState, fallback_norm, out_root: pathlib.Path =
             t0 = time.time()
             loss = train_one_epoch(
                 model, optimizer, state.graphs_root, state.splits["train"],
-                norm=norm, device="cpu", cache=graph_cache,
+                norm=norm, device=device, cache=graph_cache,
             )
             entry = {"epoch": epoch, "loss": loss, "epoch_time_s": time.time() - t0}
             if val_ids:
                 val_loss = evaluate(
-                    model, state.graphs_root, val_ids, norm=norm, device="cpu",
+                    model, state.graphs_root, val_ids, norm=norm, device=device,
                     cache=graph_cache,
                 )
                 entry["val_loss"] = val_loss
                 if best_val_loss is None or val_loss < best_val_loss:
                     best_val_loss = val_loss
                     best_epoch = epoch
-                    best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+                    best_state = {
+                        k: v.detach().to("cpu").clone() for k, v in model.state_dict().items()
+                    }
             history.append(entry)
         # val 분할이 비어 있으면(설계상 DriftState는 항상 n_val>0이지만 방어적으로)
-        # 베스트 선택이 불가능하니 마지막 에폭으로 후퇴.
-        final_state = best_state if best_state is not None else model.state_dict()
+        # 베스트 선택이 불가능하니 마지막 에폭으로 후퇴. ADR-0008: GPU로 학습했어도
+        # 체크포인트는 항상 CPU 텐서로 저장(레지스트리/서빙은 device와 무관하게 읽는다).
+        if best_state is not None:
+            final_state = best_state
+        else:
+            final_state = {k: v.detach().to("cpu").clone() for k, v in model.state_dict().items()}
         final_epoch = best_epoch if best_epoch is not None else epochs - 1
 
         ckpt_path = out_dir / "model.pt"
@@ -305,9 +320,10 @@ def make_regenerate_fn(state: DriftState):
     return regenerate_fn
 
 
-def run() -> int:
+def run(device: str = "cpu") -> int:
     """`python -m etchpipe.retrain run` — ADR-0002 루프를 실제로 1회 실행하고
-    `reports/evidence/retrain_<ts>.json`에 시도별 로그를 남긴다."""
+    `reports/evidence/retrain_<ts>.json`에 시도별 로그를 남긴다. ADR-0008: `device`는
+    fine-tune 단계에만 적용(게이트 평가는 범위 제외, CPU 고정)."""
     from etchpipe.eval.eval import load_model_a
     from etchpipe.registry.registry import Registry, compute_valid_range
     from etchpipe.retrain.loop import run_retrain_loop
@@ -321,7 +337,7 @@ def run() -> int:
 
     result = run_retrain_loop(
         CHAMPION_CKPT,
-        make_fine_tune_fn(state, champion_norm),
+        make_fine_tune_fn(state, champion_norm, device=device),
         make_gate_fn(state),
         regenerate_fn=make_regenerate_fn(state),
     )
