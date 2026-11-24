@@ -667,11 +667,19 @@ v1.0 이후 코드 조사로 확인된 구체적 공백 6건. MSA 등 구조 전
 - [ ] W9-02 데이터 버전·백업 정책 ADR — 외부 배포본(GitHub Release `data-v1-n400`,
   Hugging Face) 재업로드 기준을 사전에 문서화(W8-03에서 사용자가 재업로드
   결정→반전한 사례 재발 방지).
-- [ ] W9-03 ADR + 구현: 재학습 루프 베스트 체크포인트 선택 — `retrain/execute.py::
+- [x] W9-03 ADR + 구현: 재학습 루프 베스트 체크포인트 선택 — `retrain/execute.py::
   make_fine_tune_fn`의 `fine_tune_fn`이 마지막 에폭 가중치를 무조건 저장하는 문제
   (검증 손실 기반 선택 없음, `train_main.py::run_training()`엔 이미 있는 패턴).
   데모에서 attempt 3(에폭 10~15)의 깊이오차가 attempt 1보다 악화된 현상의 원인으로
-  2026-11-17 진단됨.
+  2026-11-17 진단됨. **ADR-0006 승인·구현 완료** — 매 에폭 `state.splits["val"]`로
+  검증 손실을 재 최저 에폭의 state_dict를 저장(val 없으면 기존처럼 마지막 에폭으로
+  후퇴). `fine_tune_fn` 외부 시그니처 불변이라 `loop.py`/`run()` 등 호출부 변경
+  불필요. 단위테스트 2건(`load_model_a`/`train_one_epoch`/`evaluate` 몽키패치,
+  physicsnemo 불필요) PASS, ruff 클린. **실제 MeshGraphNet·실제 드리프트 데이터로의
+  통합 실행은 미확인**(로컬 physicsnemo/torch_scatter 미설치, Docker 데몬 미기동 —
+  Docker 환경에서 재확인 필요). 증거:
+  `reports/evidence/W9-03_best_checkpoint_selection.md`,
+  `docs/adr/0006-retrain-loop-best-checkpoint-selection.md`.
 - [ ] W9-04 ADR + 구현: 재학습 루프 GPU 지원 — `fine_tune_fn`의 하드코딩된
   `device="cpu"`(`execute.py:130`)를 파라미터화, `run()`/`run_retrain_demo.py`까지
   반영. 팀원 실측(RTX A5000, 92.9배, `reports/evidence/W8-09_gpu_feasibility.md`)이

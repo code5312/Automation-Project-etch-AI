@@ -109,7 +109,7 @@ class DriftState:
 def make_fine_tune_fn(state: DriftState, fallback_norm, out_root: pathlib.Path = RETRAIN_RUNS_ROOT):
     def fine_tune_fn(champion_ckpt: pathlib.Path, cfg: dict) -> pathlib.Path:
         from etchpipe.eval.eval import load_model_a
-        from etchpipe.train.loop import train_one_epoch
+        from etchpipe.train.loop import evaluate, train_one_epoch
 
         model, _note, ckpt_norm = load_model_a(champion_ckpt)
         norm = ckpt_norm or fallback_norm
@@ -123,18 +123,41 @@ def make_fine_tune_fn(state: DriftState, fallback_norm, out_root: pathlib.Path =
         # W7-07: 전체 파이프라인 중 fine-tune 단계가 압도적 병목(실측 92%)이었다 — 같은
         # train_ids의 그래프 npz를 epochs번 그대로 재읽던 것을 에폭 간 공유 캐시로 생략.
         graph_cache: dict = {}
+        # ADR-0006: 마지막 에폭을 무조건 쓰면 과적합 보호가 없다(train_main.py::
+        # run_training()의 ckpt_best.pt 패턴을 포팅) — state.splits["val"]로 매 에폭
+        # 검증 손실을 재고 가장 낮은 에폭의 state_dict를 기억해 둔다.
+        val_ids = state.splits["val"]
+        best_val_loss: float | None = None
+        best_state: dict | None = None
+        best_epoch: int | None = None
         for epoch in range(epochs):
             t0 = time.time()
             loss = train_one_epoch(
                 model, optimizer, state.graphs_root, state.splits["train"],
                 norm=norm, device="cpu", cache=graph_cache,
             )
-            history.append({"epoch": epoch, "loss": loss, "epoch_time_s": time.time() - t0})
+            entry = {"epoch": epoch, "loss": loss, "epoch_time_s": time.time() - t0}
+            if val_ids:
+                val_loss = evaluate(
+                    model, state.graphs_root, val_ids, norm=norm, device="cpu",
+                    cache=graph_cache,
+                )
+                entry["val_loss"] = val_loss
+                if best_val_loss is None or val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    best_epoch = epoch
+                    best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+            history.append(entry)
+        # val 분할이 비어 있으면(설계상 DriftState는 항상 n_val>0이지만 방어적으로)
+        # 베스트 선택이 불가능하니 마지막 에폭으로 후퇴.
+        final_state = best_state if best_state is not None else model.state_dict()
+        final_epoch = best_epoch if best_epoch is not None else epochs - 1
+
         ckpt_path = out_dir / "model.pt"
         torch.save(
             {
-                "state_dict": model.state_dict(),
-                "epoch": epochs - 1,
+                "state_dict": final_state,
+                "epoch": final_epoch,
                 "mu_n": norm.node_mean.tolist(),
                 "sd_n": norm.node_std.tolist(),
                 "mu_e": norm.edge_mean.tolist(),
@@ -142,7 +165,12 @@ def make_fine_tune_fn(state: DriftState, fallback_norm, out_root: pathlib.Path =
             },
             ckpt_path,
         )
-        (out_dir / "metrics.json").write_text(json.dumps(history, indent=1))
+        (out_dir / "metrics.json").write_text(
+            json.dumps(
+                {"epochs": history, "best_epoch": final_epoch, "best_val_loss": best_val_loss},
+                indent=1,
+            )
+        )
         return ckpt_path
 
     return fine_tune_fn
