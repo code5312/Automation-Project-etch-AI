@@ -653,11 +653,17 @@ v1.0 이후 코드 조사로 확인된 구체적 공백 6건. MSA 등 구조 전
 해결될 문제가 아님, 2026-11-23 판단). 인터페이스를 바꾸는 항목은 ADR 선행(CLAUDE.md
 규칙 6), 운영 스크립트만 추가하는 항목은 ADR 없이 바로 진행.
 
-- [ ] W9-01 데이터 생애주기 정리 스크립트 — 실패한 재학습 시도 체크포인트
+- [x] W9-01 데이터 생애주기 정리 스크립트 — 실패한 재학습 시도 체크포인트
   (`runs/retrain/attemptN_*`, `history.jsonl`엔 기록되지만 승격 안 되면 디스크에
   고아로 남음, `registry.py::register` 참조) 및 드리프트 확장으로 쌓이는
   `data/drift/processed/<hash>/`를 정리. 인터페이스 변경 없음(레지스트리 기존
-  API만 읽음), ADR 불필요.
+  API만 읽음), ADR 불필요. `scripts/cleanup_retrain_artifacts.py`(dry-run 기본,
+  `--apply`로만 실제 삭제, 진행 중 루프 보호용 나이 가드) + 단위테스트 7개 PASS
+  (`etchpipe` 패키지 비의존, 로컬 바로 실행). 실제 저장소 dry-run: attempt 고아
+  1건(`attempt1_1794510586`, 이미 승격되어 model.pt 빠진 빈 껍데기) 발견, 드리프트
+  고아는 0건(expand_train 아직 한 번도 안 불림). **`--apply` 실제 삭제 완료
+  (2026-11-24, 사용자 확인 후)** — attempt 고아 1건 제거, 레지스트리/챔피언 포인터
+  영향 없음 확인. 증거: `reports/evidence/W9-01_cleanup_script.md`.
 - [ ] W9-02 데이터 버전·백업 정책 ADR — 외부 배포본(GitHub Release `data-v1-n400`,
   Hugging Face) 재업로드 기준을 사전에 문서화(W8-03에서 사용자가 재업로드
   결정→반전한 사례 재발 방지).
