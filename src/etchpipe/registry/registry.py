@@ -27,6 +27,25 @@ def sha256_file(path: str | pathlib.Path, chunk_size: int = 1 << 20) -> str:
     return h.hexdigest()
 
 
+def resolve_artifact_path(
+    model_id: str,
+    legacy_paths: dict[str, pathlib.Path],
+    retrain_runs_root: str | pathlib.Path,
+) -> pathlib.Path | None:
+    """`model_id` -> 실제 체크포인트 파일 경로. `card.json`은 `artifact_sha256`만 기록하고
+    경로 자체는 저장하지 않으므로(설계상 공백), 호출부가 두 규칙으로 직접 찾아야 한다:
+    최초 수동 등록분은 `legacy_paths`(고정 매핑), 그 외(자동 재학습 산출물)는
+    `<retrain_runs_root>/<model_id>/model.pt` 규칙. `serve/inference.py::load_champion`이
+    W7-01(2026-11-13, champion이 재학습 산출물로 바뀌며 `/predict` 503 나던 버그 수정)
+    에서 처음 이 로직을 만들었고, W9-06에서 `retrain/execute.py`·
+    `scripts/run_drift_monitor.py`도 같은 문제(champion이 바뀌어도 고정 경로만 보던 것)를
+    겪어 공용화했다[확인, 2026-11-25]."""
+    if model_id in legacy_paths:
+        return legacy_paths[model_id]
+    candidate = pathlib.Path(retrain_runs_root) / model_id / "model.pt"
+    return candidate if candidate.exists() else None
+
+
 def compute_valid_range(
     raw_dir: str | pathlib.Path, run_ids: list[str]
 ) -> dict[str, dict[str, float]]:

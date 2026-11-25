@@ -707,10 +707,22 @@ v1.0 이후 코드 조사로 확인된 구체적 공백 6건. MSA 등 구조 전
   독스트링에 결정 근거만 명시. 증거:
   `reports/evidence/W9-05_independent_restart_decision.md`,
   `docs/adr/0009-retrain-attempts-independent-restart.md`.
-- [ ] W9-06 ADR + 구현: 드리프트 감지→재학습 자동 트리거 — 지금은
+- [x] W9-06 ADR + 구현: 드리프트 감지→재학습 자동 트리거 — 지금은
   `monitor.py::check_drift()`가 판정만 하고 사람이 수동으로 재학습을 실행
   (`.github/workflows/retrain-demo.yml`도 `workflow_dispatch`만). 스케줄 워크플로우로
-  `check_drift()` 결과를 `retrain.execute.run()` 호출에 연결.
+  `check_drift()` 결과를 `retrain.execute.run()` 호출에 연결. **ADR-0010 승인·구현
+  완료** — 설계 중 선행 문제 2건 발견·해결: ①champion이 `runs/mgn_tuned/model.pt`에
+  하드코딩돼 승격 후에도 구버전만 보던 문제(`resolve_artifact_path` 공용화,
+  `current_champion_ckpt()` 신설, `run()`/`run_drift_monitor.py` 교체) ②GitHub
+  호스팅 러너에 영속 디스크가 없는 문제(`actions/cache`로 registry/runs 상태를
+  "최선 노력" 수준으로 이어감 — 사용자 선택, 두 차례 재확인 후 동일 결정, 캐시
+  LRU 삭제·CI-로컬 레지스트리 분리·콜드런 6시간 타임아웃 위험을 한계로 명시).
+  `.github/workflows/drift-retrain-schedule.yml`(신규, 매주 월요일 cron+수동 트리거).
+  단위테스트 7건(registry 3건+champion 조회 4건) PASS, 기존 serve 테스트 7건 회귀
+  없음, ruff 클린. **스케줄 워크플로우 실제 실행은 미확인**(다음 `workflow_dispatch`
+  수동 1회로 재확인 필요). 증거:
+  `reports/evidence/W9-06_drift_retrain_auto_trigger.md`,
+  `docs/adr/0010-drift-retrain-auto-trigger.md`.
 
 ---
 

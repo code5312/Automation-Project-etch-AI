@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from etchpipe.gate.gate import GateResult
-from etchpipe.registry.registry import Registry, compute_valid_range, sha256_file
+from etchpipe.registry.registry import (
+    Registry,
+    compute_valid_range,
+    resolve_artifact_path,
+    sha256_file,
+)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "raw"
 
@@ -158,3 +163,30 @@ def test_rollback_rejects_unregistered_model_id(tmp_path: Path) -> None:
     reg = Registry(tmp_path / "registry")
     with pytest.raises(ValueError):
         reg.rollback("never-registered")
+
+
+# W9-06: `resolve_artifact_path`(serve/inference.py::_artifact_path_for와
+# retrain/execute.py::current_champion_ckpt가 공유하는 공용 로직) 단위 테스트.
+
+
+def test_resolve_artifact_path_uses_legacy_mapping(tmp_path: Path) -> None:
+    legacy_path = tmp_path / "runs" / "mgn_tuned" / "model.pt"
+    legacy = {"mgn_tuned_ep2": legacy_path}
+
+    assert resolve_artifact_path("mgn_tuned_ep2", legacy, tmp_path / "runs" / "retrain") == (
+        legacy_path
+    )
+
+
+def test_resolve_artifact_path_falls_back_to_retrain_runs_root(tmp_path: Path) -> None:
+    ckpt_dir = tmp_path / "mgn_retrain_20261112T212130"
+    ckpt_dir.mkdir()
+    ckpt_path = ckpt_dir / "model.pt"
+    ckpt_path.write_bytes(b"fake")
+
+    found = resolve_artifact_path("mgn_retrain_20261112T212130", {}, tmp_path)
+    assert found == ckpt_path
+
+
+def test_resolve_artifact_path_returns_none_when_unknown(tmp_path: Path) -> None:
+    assert resolve_artifact_path("never-seen-model-id", {}, tmp_path) is None

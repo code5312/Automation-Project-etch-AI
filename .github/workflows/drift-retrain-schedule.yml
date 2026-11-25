@@ -1,0 +1,98 @@
+name: drift-retrain-schedule
+
+# ADR-0010(W9-06): 드리프트 감지(monitor.py::check_drift) → 재학습(retrain.execute.run())
+# 자동 트리거. GitHub 호스팅 러너는 매 실행마다 깨끗한 디스크로 시작하고 data/·runs/·
+# registry/는 전부 .gitignore 대상이라, actions/cache로 상태를 "최대한" 이어받는다 —
+# 이건 진짜 영속 저장소가 아니라 GitHub 캐시 정책(저장소당 10GB, 7일 미접근 시 삭제 등
+# LRU)에 종속된 최선 노력 수준이다[제안]. 이 워크플로우의 registry/ 상태는 사용자 로컬
+# PC의 registry/와 서로 다른, 별도로 갈라진 레지스트리일 수 있다 — 통합은 범위 밖
+# (ADR-0010 "알려진 한계" 참고).
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # 매주 월요일 03:00 UTC [제안, 임의 기본값 — 실측 근거 없음]
+  workflow_dispatch: {}
+
+jobs:
+  drift-retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # retrain-demo.yml과 동일 조합 — 드리프트 생성/2차 시도 재생성(ViennaPS)과
+      # 미세조정·게이트(torch/physicsnemo)를 한 잡에서 같이 써야 한다.
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libgl1 libxrender1 libxext6 libsm6 libice6 libx11-6 build-essential
+      - run: pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchvision==0.29.1
+      - run: pip install nvidia-physicsnemo==2.2.2 torch_geometric==2.8.1
+      - run: pip install --no-build-isolation torch_scatter==2.1.2
+      - run: pip install ViennaPS==4.5.0 ViennaLS==5.8.5
+      - run: pip install pyvista==0.49.1 shapely==2.2.0 scipy==1.17.1 PyYAML==6.0.3 numpy==2.4.6
+      - run: pip install -r requirements-dev.txt
+      - run: pip install -e .
+
+      # 모니터링 레시피 raw 시뮬레이션(ViennaPS, 레시피당 8~47분 — 10개면 수시간
+      # [확인, run_drift_sim.py 모듈 독스트링])은 configs/sim/live.yaml이 안 바뀌면
+      # 다시 돌릴 필요 없다 — 해당 파일 해시로 캐시(바뀌면 키가 달라져 자동 재생성).
+      - name: Restore drift-monitor raw cache
+        uses: actions/cache@v4
+        with:
+          path: data/drift_monitor
+          key: drift-monitor-raw-${{ hashFiles('configs/sim/live.yaml') }}
+
+      # ADR-0010 "알려진 한계": registry/·runs/retrain/는 git에 없다 — 이 캐시가 유일한
+      # 영속화 수단. 비어 있으면(최초 실행 또는 캐시 유실) current_champion_ckpt()가
+      # runs/mgn_tuned/model.pt(git에 커밋된 baseline)로 후퇴해 재부트스트랩한다.
+      - name: Restore registry/runs state cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            registry
+            runs/retrain
+          key: registry-state-${{ github.run_id }}
+          restore-keys: |
+            registry-state-
+
+      - name: Run drift sim if monitor raw cache missed
+        run: |
+          if [ -z "$(ls -A data/drift_monitor/raw 2>/dev/null)" ]; then
+            python scripts/run_drift_sim.py
+          else
+            echo "캐시 적중 — 드리프트 모니터링 raw 재사용(configs/sim/live.yaml 변경 없음)"
+          fi
+
+      - name: Run drift monitor (champion은 레지스트리에서 동적 조회, ADR-0010)
+        run: python scripts/run_drift_monitor.py
+
+      - name: Decide trigger
+        id: drift
+        run: |
+          triggered=$(jq -r '.triggered' reports/eval/W6-02_drift_monitor.json)
+          echo "triggered=$triggered" >> "$GITHUB_OUTPUT"
+
+      - name: Run auto-retrain loop if triggered
+        if: steps.drift.outputs.triggered == 'true'
+        run: python -m etchpipe.retrain run
+
+      # 항상 저장 — 중간에 실패해도(게이트 BLOCK 포함) history.jsonl 등 진행 상황을
+      # 다음 실행이 이어받게 한다.
+      - name: Save registry/runs state cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            registry
+            runs/retrain
+          key: registry-state-${{ github.run_id }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: drift-retrain-result
+          path: |
+            reports/eval/W6-02_drift_monitor.json
+            reports/evidence/retrain_*.json

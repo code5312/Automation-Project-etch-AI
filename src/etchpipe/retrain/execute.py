@@ -38,6 +38,25 @@ VAL40_GRAPHS_ROOT = REPO_ROOT / "data" / "processed" / "4b8c0ce1bc98" / "graphs"
 VAL40_SPLITS_PATH = REPO_ROOT / "data" / "splits.json"
 
 
+def current_champion_ckpt() -> pathlib.Path:
+    """ADR-0010/W9-06: 레지스트리의 실제 현재 champion을 동적으로 찾는다 — 이전까지
+    `CHAMPION_CKPT`(최초 baseline, `mgn_tuned_ep2`) 상수를 `run()`이 그대로 썼던 걸
+    교체(한 번이라도 자동 재학습이 승격되면 `run()`은 그 뒤로도 영원히 구버전
+    baseline에서만 미세조정했다 — W9-06 설계 중 발견). `serve/inference.py::
+    load_champion`과 같은 해석 규칙(`registry.resolve_artifact_path`) 공유.
+    레지스트리에 champion이 전혀 없으면(최초 부트스트랩 전) `CHAMPION_CKPT`로 후퇴."""
+    from etchpipe.registry.registry import Registry, resolve_artifact_path
+
+    reg = Registry(REPO_ROOT / "registry")
+    model_id = reg.current_champion()
+    if model_id is None:
+        return CHAMPION_CKPT
+    path = resolve_artifact_path(model_id, {"mgn_tuned_ep2": CHAMPION_CKPT}, RETRAIN_RUNS_ROOT)
+    if path is None or not path.is_file():
+        raise RuntimeError(f"레지스트리 champion({model_id})의 아티팩트를 찾을 수 없음: {path}")
+    return path
+
+
 class DriftState:
     """드리프트 데이터(train/val/golden_drift)를 들고 다니며, `expand_train`(2차 시도)이
     train을 늘리면 다시 ETL해 `dataset_hash`/`graphs_root`를 갱신한다.
@@ -333,12 +352,14 @@ def run(device: str = "cpu") -> int:
     print(f"  train={len(state.splits['train'])} val={len(state.splits['val'])} "
           f"golden_drift={len(state.splits['golden_drift'])} dataset_hash={state.dataset_hash}")
 
-    _champion_model, _note, champion_norm = load_model_a(CHAMPION_CKPT)
+    champion_ckpt = current_champion_ckpt()  # ADR-0010/W9-06: 고정 baseline 대신 동적 조회
+    print(f"  champion_ckpt={champion_ckpt}")
+    _champion_model, _note, champion_norm = load_model_a(champion_ckpt)
 
     result = run_retrain_loop(
-        CHAMPION_CKPT,
+        champion_ckpt,
         make_fine_tune_fn(state, champion_norm, device=device),
-        make_gate_fn(state),
+        make_gate_fn(state, champion_ckpt=champion_ckpt),
         regenerate_fn=make_regenerate_fn(state),
     )
 

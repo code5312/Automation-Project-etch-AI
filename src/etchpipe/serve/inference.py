@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from etchpipe.registry.registry import Registry
+from etchpipe.registry.registry import Registry, resolve_artifact_path
 
 if TYPE_CHECKING:
     import torch
@@ -54,10 +54,10 @@ _RETRAIN_RUNS_ROOT = REPO_ROOT / "runs" / "retrain"
 
 
 def _artifact_path_for(model_id: str) -> pathlib.Path | None:
-    if model_id in _ARTIFACT_PATHS:
-        return _ARTIFACT_PATHS[model_id]
-    candidate = _RETRAIN_RUNS_ROOT / model_id / "model.pt"
-    return candidate if candidate.exists() else None
+    # W9-06: 공용 로직으로 교체(`registry.py::resolve_artifact_path`) — `_ARTIFACT_PATHS`/
+    # `_RETRAIN_RUNS_ROOT`는 모듈 전역을 그대로 읽어 넘기므로 기존 monkeypatch 테스트와
+    # 동작 동일(값이 아니라 이름으로 참조해 호출 시점에 다시 읽음).
+    return resolve_artifact_path(model_id, _ARTIFACT_PATHS, _RETRAIN_RUNS_ROOT)
 
 
 class ChampionUnavailable(RuntimeError):

@@ -5,7 +5,12 @@
 
 ADR-0005 결정5(2026-11-14): 트리거 판정을 champion 골든셋 Chamfer 기준 비율에서
 레시피별 깊이·CD·롤아웃 3조건 통과율로 교체 — 골든셋 ETL·기준값 계산 단계가 더 이상
-필요 없다(제거됨)."""
+필요 없다(제거됨).
+
+ADR-0010(W9-06): champion 체크포인트는 더 이상 `runs/mgn_tuned/model.pt` 고정이
+아니라 레지스트리의 실제 현재 champion을 동적으로 조회한다(`retrain/execute.py::
+current_champion_ckpt`) — 이전엔 자동 재학습으로 champion이 바뀌어도 이 모니터는
+항상 구버전 baseline의 드리프트만 봤다[확인, W9-06 설계 중 발견]."""
 
 import json
 import pathlib
@@ -16,9 +21,9 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from etchpipe.etl.etl import THETA_KEYS, etl_run  # noqa: E402
 from etchpipe.eval.eval import load_model_a  # noqa: E402
+from etchpipe.retrain.execute import current_champion_ckpt  # noqa: E402
 from etchpipe.retrain.monitor import check_drift  # noqa: E402
 
-MGN_TUNED_CKPT = REPO_ROOT / "runs" / "mgn_tuned" / "model.pt"
 MONITOR_RAW_DIR = REPO_ROOT / "data" / "drift_monitor" / "raw"
 MONITOR_GRAPHS_ROOT = REPO_ROOT / "data" / "drift_monitor" / "graphs"
 
@@ -28,7 +33,9 @@ def _monitor_recipe_ids() -> list[str]:
 
 
 def main() -> int:
-    model, note, norm = load_model_a(MGN_TUNED_CKPT)
+    champion_ckpt = current_champion_ckpt()
+    model, note, norm = load_model_a(champion_ckpt)
+    print(f"champion_ckpt={champion_ckpt}")
     print(f"champion: {note}")
 
     # 모니터링 레시피 ETL(시뮬레이션은 run_drift_sim.py가 이미 끝냄).
@@ -39,6 +46,7 @@ def main() -> int:
 
     # champion 예측 vs 실제 시뮬레이션 결과, 레시피별 3조건 통과율 판정(ADR-0005 결정5).
     result = check_drift(model, norm, MONITOR_GRAPHS_ROOT, MONITOR_RAW_DIR, monitor_ids)
+    result["champion_ckpt"] = str(champion_ckpt)
     print(json.dumps(result, indent=1, ensure_ascii=False))
 
     out_path = REPO_ROOT / "reports" / "eval" / "W6-02_drift_monitor.json"
