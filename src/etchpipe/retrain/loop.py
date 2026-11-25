@@ -35,7 +35,11 @@ def run_retrain_loop(
     `dataclasses.asdict`한 것과 같은 모양이면 바로 맞음). PASS면 **즉시 승격하고 루프
     종료**, `max_attempts`(기본 4)회 모두 BLOCK이면 champion 유지로 종료한다 — 어느
     경우든 `attempts`(W6-05 `retrain_<ts>.json`과 같은 키 이름)에 시도별 config·gate
-    결과를 전부 남긴다."""
+    결과를 전부 남긴다.
+
+    **ADR-0009(W9-05)**: 시도마다 `champion_ckpt`를 그대로 넘겨 매번 원본 champion에서
+    독립 재시작한다 — 이전 시도(특히 BLOCK된, 즉 게이트가 거부한) 결과를 이어받지
+    않는다. 명시적 결정(2026-11-25) — 검증 안 된 상태 위에 쌓지 않기 위함."""
     attempts_log: list[dict[str, Any]] = []
     for cfg in ATTEMPTS[:max_attempts]:
         if cfg["regenerate"] and regenerate_fn is not None:

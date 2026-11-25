@@ -697,10 +697,16 @@ v1.0 이후 코드 조사로 확인된 구체적 공백 6건. MSA 등 구조 전
   실행은 미확인**(로컬 GPU 없음, Docker 데몬 미기동 — GPU 환경에서 재확인 필요).
   증거: `reports/evidence/W9-04_retrain_gpu_device.md`,
   `docs/adr/0008-retrain-loop-gpu-device-param.md`.
-- [ ] W9-05 ADR(팀 합의 필요): 재학습 시도 간 누적 학습 여부 — 현재
-  `retrain/loop.py::run_retrain_loop`는 매 시도가 원본 `champion_ckpt`에서 재시작
-  (이전 시도 이어받지 않음). 설계 의도(ADR-0002 에스컬레이션 단계 독립 가정)인지
-  재검토 — 바꿀지 유지할지 합의 전까지 구현 보류.
+- [x] W9-05 ADR: 재학습 시도 간 누적 학습 여부 — 현재 `retrain/loop.py::
+  run_retrain_loop`는 매 시도가 원본 `champion_ckpt`에서 재시작(이전 시도 이어받지
+  않음). 설계 의도(ADR-0002 에스컬레이션 단계 독립 가정)인지 재검토. **ADR-0009
+  승인 — 독립 재시작 유지로 결정**(사용자 단독 결정 2026-11-25, 팀 합의 없이 진행
+  — "팀 동의 안해도 돼"). 근거: ①게이트가 거부한 상태 위에 쌓지 않음 ②에스컬레이션
+  표의 단일 변수 비교 구조 보존 ③ADR-0008로 GPU 지원 후 시간 절감 명분 약화
+  ④ADR-0006이 이미 과적합 문제 해소. 코드 변경 없음, `loop.py::run_retrain_loop`
+  독스트링에 결정 근거만 명시. 증거:
+  `reports/evidence/W9-05_independent_restart_decision.md`,
+  `docs/adr/0009-retrain-attempts-independent-restart.md`.
 - [ ] W9-06 ADR + 구현: 드리프트 감지→재학습 자동 트리거 — 지금은
   `monitor.py::check_drift()`가 판정만 하고 사람이 수동으로 재학습을 실행
   (`.github/workflows/retrain-demo.yml`도 `workflow_dispatch`만). 스케줄 워크플로우로
