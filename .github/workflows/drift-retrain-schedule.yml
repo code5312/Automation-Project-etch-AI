@@ -74,9 +74,95 @@ jobs:
           triggered=$(jq -r '.triggered' reports/eval/W6-02_drift_monitor.json)
           echo "triggered=$triggered" >> "$GITHUB_OUTPUT"
 
+      # 2026-11-25 보완(코드 리뷰로 발견, 실행 전 발견): `retrain.execute.run()`의
+      # `DriftState()`가 요구하는 재학습용 드리프트 데이터(train 40/val 10/
+      # golden_drift 10 = 60개, `data/drift/`)는 `data/drift_monitor/`(모니터링용
+      # 10개, 위에서 이미 캐시)와 **완전히 별개 디렉터리·별개 레시피셋**이다 — 처음
+      # 구현에서 빠뜨려 `triggered=true`가 뜨는 순간 `FileNotFoundError`로 죽는 구조
+      # 였다. `triggered`일 때만 복원/생성(평소엔 불필요한 2~6시간 재시뮬레이션을
+      # 피함).
+      - name: Cache drift training data (data/drift) — only when retraining
+        if: steps.drift.outputs.triggered == 'true'
+        uses: actions/cache@v4
+        with:
+          path: data/drift
+          key: drift-train-data-${{ hashFiles('configs/sim/live.yaml') }}
+
+      - name: Generate drift training data if cache missed
+        if: steps.drift.outputs.triggered == 'true'
+        run: |
+          if [ -z "$(ls -A data/drift/raw 2>/dev/null)" ]; then
+            python scripts/run_drift_data_gen.py
+          else
+            echo "캐시 적중 — drift 학습 데이터(data/drift) 재사용(live.yaml 변경 없음)"
+          fi
+
+      # 2026-11-25 보완: 게이트 C(val-40 재확인, gate_a_ok+physics_ok일 때만 실행)는
+      # 원본 400개 데이터셋(`data/raw`+`data/processed/4b8c0ce1bc98`+`data/splits.json`)
+      # 을 요구한다. 400개를 ViennaPS로 처음부터 다시 돌리는 건 현실적으로 불가능
+      # (W3-04 당시 실측 2.6일) — 대신 이미 공개된 GitHub Release(`data-v1-n400`
+      # 태그, `etch-raw-n400.zip`)에서 raw를 받는다[확인, 2026-11-25 — 자산 구조 직접
+      # 확인: `<run_id>/meta.json`+`recipes.json`, 400개 전부 포함]. 이 자산은 W3-12
+      # 버그 수정 전 버전(ADR-0007)이지만 그 버그는 OOD 레시피만 건드렸고 게이트
+      # C는 OOD를 전혀 안 쓴다(`val` 분할만, `_val40_run_ids`) — 이 용도엔 무관.
+      - name: Restore original dataset cache (data/raw)
+        if: steps.drift.outputs.triggered == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/raw
+            data/processed
+            data/splits.json
+          key: original-dataset-v1
+
+      - name: Download+process original dataset if cache missed
+        if: steps.drift.outputs.triggered == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "$(ls -A data/raw 2>/dev/null)" ]; then
+            echo "캐시 적중 — 원본 400개 데이터셋(data/raw) 재사용"
+            exit 0
+          fi
+          gh release download data-v1-n400 \
+            --repo code5312/Automation-Project-etch-AI \
+            -p "etch-raw-n400.zip" -O etch-raw-n400.zip
+          mkdir -p data/raw
+          unzip -q etch-raw-n400.zip -d data/raw
+          rm etch-raw-n400.zip data/raw/recipes.json
+          # data/splits.json은 raw 없이도 고정 seed로 바로 나오는 순수 계산(ETL
+          # 불필요, scripts/gen_splits.py 독스트링 참고) — 결정론적이라 매번 동일.
+          python scripts/gen_splits.py
+          # W3-04 당시 dataset_hash=4b8c0ce1bc98를 만든 것과 똑같은 명령
+          # (reports/evidence/W3-04_stats_dataset_hash.md) — raw(위에서 받은 것)와
+          # splits.json(방금 생성)이 원본과 같으면 같은 해시가 나와야 한다.
+          PYTHONPATH=src python -c "
+          import json
+          from etchpipe.etl.etl import process_dataset, THETA_KEYS
+          splits = json.load(open('data/splits.json'))
+          manifest = process_dataset('data/raw', splits, 'data/processed', THETA_KEYS, max_workers=4)
+          print(json.dumps(manifest, indent=1))
+          "
+          # VAL40_GRAPHS_ROOT(execute.py)가 이 정확한 해시를 하드코딩하고 있다 —
+          # 다르게 나오면 바로 알아채도록 명시적으로 확인(조용히 넘어가지 않음).
+          if [ ! -d "data/processed/4b8c0ce1bc98" ]; then
+            echo "::error::ETL 결과 dataset_hash가 4b8c0ce1bc98와 다름 — execute.py::VAL40_GRAPHS_ROOT 불일치, 수동 확인 필요"
+            exit 1
+          fi
+
       - name: Run auto-retrain loop if triggered
         if: steps.drift.outputs.triggered == 'true'
         run: python -m etchpipe.retrain run
+
+      - name: Save original dataset cache (seeded above from GitHub Release on first run)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/raw
+            data/processed
+            data/splits.json
+          key: original-dataset-v1
 
       # 항상 저장 — 중간에 실패해도(게이트 BLOCK 포함) history.jsonl 등 진행 상황을
       # 다음 실행이 이어받게 한다.

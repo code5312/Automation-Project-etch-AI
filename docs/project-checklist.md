@@ -719,8 +719,16 @@ v1.0 이후 코드 조사로 확인된 구체적 공백 6건. MSA 등 구조 전
   LRU 삭제·CI-로컬 레지스트리 분리·콜드런 6시간 타임아웃 위험을 한계로 명시).
   `.github/workflows/drift-retrain-schedule.yml`(신규, 매주 월요일 cron+수동 트리거).
   단위테스트 7건(registry 3건+champion 조회 4건) PASS, 기존 serve 테스트 7건 회귀
-  없음, ruff 클린. **스케줄 워크플로우 실제 실행은 미확인**(다음 `workflow_dispatch`
-  수동 1회로 재확인 필요). 증거:
+  없음, ruff 클린. **2026-11-25 보완 2건(실행 전 코드 리뷰·사용자 지시로 발견·수정)**:
+  ①최초 구현이 `data/drift_monitor`(모니터링용 10개)만 캐시하고 `run()`이 실제로
+  요구하는 재학습용 60개(`data/drift`)·게이트 C용 원본 400개(`data/raw`)를 빠뜨려
+  `triggered=true` 순간 즉시 실패하는 구조였음 — `data/drift`는 캐시+조건부
+  재생성(`run_drift_data_gen.py`)으로 수정. ②`data/raw`(400개, 재생성 스크립트
+  없음)는 GitHub Release(`data-v1-n400`, `etch-raw-n400.zip`, 실제 다운로드해
+  구조 확인)에서 자동 다운로드+ETL로 수정 — W3-12 버그(OOD만 영향)는 게이트 C가
+  `val` 분할만 써서 무관함을 재확인, 해시 불일치 시 `::error::`로 명시적 실패.
+  **스케줄 워크플로우 실제 실행은 미확인**(다음 `workflow_dispatch` 수동 1회로
+  재확인 필요). 증거:
   `reports/evidence/W9-06_drift_retrain_auto_trigger.md`,
   `docs/adr/0010-drift-retrain-auto-trigger.md`.
 

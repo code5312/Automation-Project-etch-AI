@@ -84,6 +84,33 @@ monkeypatch 테스트 7건 전부 그대로 통과 확인 — 동작 불변).
   `jq`로 읽어 `true`일 때만 `python -m etchpipe.retrain run` 실행.
 - 결과(드리프트 모니터 JSON + 재학습 증거 JSON)는 워크플로우 아티팩트로 업로드.
 
+**2026-11-25 보완(실행 전 코드 리뷰로 발견, 사용자 요청으로 수정)**: 최초 설계는
+`data/drift_monitor/`(모니터링용 10개)만 캐시했는데, `retrain.execute.run()`의
+`DriftState()`가 요구하는 **재학습용** 드리프트 데이터(`data/drift/`, train 40/
+val 10/golden_drift 10 = 60개, 모니터링용과 완전히 별개 레시피셋)와, 게이트 C
+(val-40 재확인)가 요구하는 **원본** 400개 데이터셋(`data/raw`+
+`data/processed/4b8c0ce1bc98`+`data/splits.json`)을 빠뜨려, `triggered=true`가
+뜨는 순간(또는 게이트 A를 통과하는 순간) `FileNotFoundError`로 죽는 구조였다 —
+champion 동적 조회(결정 1) 코드에 도달하기도 전에 실패. 보완:
+
+- `data/drift`: `data/drift_monitor`와 같은 방식(`configs/sim/live.yaml` 해시 키
+  캐시)으로 추가, 캐시 미스 시 `scripts/run_drift_data_gen.py`로 자동 재생성(2~6시간
+  — `triggered`일 때만 돌게 조건을 걸어 평소엔 불필요한 재시뮬레이션을 피함).
+- `data/raw`+`data/processed`+`data/splits.json`: **2026-11-25 2차 보완(사용자
+  지시, 방법 1 채택)** — 캐시 미스 시 ViennaPS 재시뮬레이션(400개, 불가능) 대신
+  이미 공개된 GitHub Release(`data-v1-n400` 태그, `etch-raw-n400.zip`, 42MB)를
+  `gh release download`로 받아 자동 복구한다[확인, 2026-11-25 — 자산을 실제로
+  받아 구조 확인: `<run_id>/meta.json` 400개(ood0000~19, 나머지 r####) +
+  `recipes.json`]. 받은 뒤 `scripts/gen_splits.py`(raw 불필요, 고정 seed 순수
+  계산 — [확인, 코드 직접 읽음])로 `data/splits.json` 생성, W3-04 당시와 동일한
+  명령(`process_dataset(..., max_workers=4)`)으로 ETL. 결과 `dataset_hash`가
+  `execute.py::VAL40_GRAPHS_ROOT`가 하드코딩한 `4b8c0ce1bc98`와 다르면
+  (`data/processed/4b8c0ce1bc98` 디렉터리 부재) 워크플로우가 `::error::`로 명시적
+  실패 — 조용히 틀린 채 넘어가지 않게.
+  이 자산은 W3-12 버그 수정 전 버전(ADR-0007)이지만, 그 버그는 OOD 레시피만
+  건드렸고 게이트 C는 `val` 분할만 쓴다(`_val40_run_ids`, OOD 전혀 안 씀) — 이
+  용도엔 무관[확인, W3-12 범위 재확인].
+
 **명시적으로 인정하는 한계**[제안, 전부 실제 스케줄 실행으로 재확인 전]:
 
 1. **진짜 영속 저장소가 아니다** — GitHub의 캐시 LRU 정책(저장소당 10GB, 7일 미접근
@@ -95,11 +122,21 @@ monkeypatch 테스트 7건 전부 그대로 통과 확인 — 동작 불변).
    아니다 — 그러려면 실제 영속 스토리지(self-hosted 러너 또는 외부 저장소)가
    필요하고, 사용자가 명시적으로 이 비용을 피하는 쪽을 선택했다.
 3. **콜드 캐시(`live.yaml` 변경 직후) 시뮬레이션이 GitHub Actions 기본 작업 시간
-   한도(6시간)를 넘길 수 있다** — 레시피 10개 × 최대 47분 = 최대 7.8시간. 이 경우
-   워크플로우가 중간에 강제 종료되고(`if: always()` 저장 단계가 못 돌 수 있음)
-   드리프트 모니터링 raw가 일부만 남을 수 있다 — 재시도(다음 스케줄 또는 수동
-   `workflow_dispatch`)가 필요하다. 이번 ADR에서 해결하지 않음(시간 상자를 쪼개
-   여러 실행에 나누는 설계는 범위 밖, 필요해지면 별도 ADR).
+   한도(6시간)를 넘길 수 있다** — 모니터링 10개(최대 7.8시간)뿐 아니라 보완된
+   재학습용 60개(`data/drift`, 최대 수배)도 같은 위험을 가진다. 이 경우 워크플로우가
+   중간에 강제 종료되고(`if: always()` 저장 단계가 못 돌 수 있음) 데이터가 일부만
+   남을 수 있다 — 재시도(다음 스케줄 또는 수동 `workflow_dispatch`)가 필요하다.
+   이번 ADR에서 해결하지 않음(시간 상자를 쪼개 여러 실행에 나누는 설계는 범위 밖,
+   필요해지면 별도 ADR).
+4. **`data/raw`(원본 400개)는 2026-11-25 2차 보완으로 GitHub Release 다운로드
+   경로가 생겼지만, 그 경로 자체에도 한계가 있다**[제안, 실제 CI 실행으로 재확인
+   전]: (a) Release 자산이 삭제·태그 변경되면 다운로드가 실패한다(현재는 사용자
+   팀 소유 공개 Release라 통제 가능하지만 외부 요인). (b) ETL 재현이 정확히
+   `4b8c0ce1bc98`를 만든다는 보장은 "같은 입력(raw+splits)이면 같은 해시"라는
+   `process_dataset`의 결정론 가정에 의존한다 — `THETA_KEYS`나 ETL 로직이 그동안
+   바뀌었으면(이력상 바뀐 적 없음, 2026-11-25 기준) 다른 해시가 나오고, 이 경우
+   워크플로우가 `::error::`로 명시적으로 실패한다(조용히 틀리지 않음, 위 결정 2
+   참고) — 그 실패를 해결하려면 `VAL40_GRAPHS_ROOT` 쪽을 사람이 다시 봐야 한다.
 
 ## 비용·트레이드오프
 
