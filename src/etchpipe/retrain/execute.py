@@ -13,8 +13,10 @@ run` 엔트리포인트.
 150~290초/에폭) 시간 예산 안에서 끝내려는 선택, GPU라면 상한을 쓰는 게 더 맞음]."""
 
 import json
+import math
 import pathlib
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import torch
@@ -155,6 +157,7 @@ def _eval_recipes(
     graphs_root: pathlib.Path,
     raw_dir: pathlib.Path,
     check_shape: bool,
+    profile_ids: set[str] | None = None,
 ) -> dict:
     """레시피 묶음의 깊이·CD(아직 안 배선, 깊이로 대체 — [미확인, 알려진 한계])·롤아웃
     스텝별 Chamfer·물리(선 꼬임)를 모은다. `check_shape=True`면 IoU·HD95도 같이(ADR-0005
@@ -163,16 +166,34 @@ def _eval_recipes(
 
     depth_pred, depth_true, rollout_errors = [], [], []
     iou_vals, hd95_vals, self_x_total = [], [], 0
+    profiles = {}
     for rid in run_ids:
         meta = json.loads((pathlib.Path(raw_dir) / rid / "meta.json").read_text())
         actual_k = meta["actual_k"]
         steps = sorted({s for s in EVAL_STEPS if s <= actual_k} | {actual_k})
+        profile = {}
+
+        def record_profile(reference, prediction):
+            profile["reference_xy_um"] = reference.tolist()
+            profile["prediction_xy_um"] = prediction.tolist() if prediction is not None else None
+
         result = rollout_val_error_by_step(
             model, graphs_root, rid, steps, meta["step_min"], norm=norm,
             check_physics=True, check_shape=check_shape,
             fix_mask=True, guard=True, loop_removal=True,
+            record_final_profile=record_profile if profile_ids and rid in profile_ids else None,
         )
         final = result[actual_k]
+        if profile:
+            profiles[rid] = {
+                **profile,
+                "step": actual_k,
+                "time_min": actual_k * meta["step_min"],
+                "chamfer_by_step": {
+                    s: result[s]["chamfer"] if math.isfinite(result[s]["chamfer"]) else None
+                    for s in steps
+                },
+            }
         depth_pred.append(final["depth_pred"])
         depth_true.append(final["depth_true"])
         rollout_errors.append([result[s]["chamfer"] for s in steps])
@@ -186,6 +207,7 @@ def _eval_recipes(
         "cd_pred": depth_pred, "cd_true": depth_true,
         "rollout_errors": rollout_errors, "self_x_total": self_x_total,
         "iou": iou_vals, "hd95": hd95_vals,
+        "profiles": profiles,
     }
 
 
@@ -193,7 +215,13 @@ def _val40_run_ids() -> list[str]:
     return json.loads(VAL40_SPLITS_PATH.read_text())["val"]
 
 
-def make_gate_fn(state: DriftState, champion_ckpt: pathlib.Path = CHAMPION_CKPT):
+def make_gate_fn(
+    state: DriftState,
+    champion_ckpt: pathlib.Path = CHAMPION_CKPT,
+    *,
+    record_profiles: Callable[[pathlib.Path | None, dict], None] | None = None,
+    record_gate_progress: Callable[[dict], None] | None = None,
+):
     """ADR-0005 — 관문 A(결정3, 레시피별 깊이·CD·롤아웃 3조건 통과율) + 물리(ADR-0004
     결정4, 변경 없음) + 관문 C(결정4, 윌콕슨 IoU 회귀·HD95 악화·val 40 재확인) — **관문
     B(개선 검정)는 범위 제외**(ADR 재결정, "정기 재학습" 코드패스 없음).
@@ -204,10 +232,13 @@ def make_gate_fn(state: DriftState, champion_ckpt: pathlib.Path = CHAMPION_CKPT)
     from etchpipe.eval.eval import load_model_a
 
     champion_model, _note, champion_norm = load_model_a(champion_ckpt)
+    profile_ids = set(state.splits["val"]) if record_profiles is not None else None
     champion_drift_eval = _eval_recipes(
         champion_model, champion_norm, state.eval_ids(), state.graphs_root, state.raw_dir,
-        check_shape=True,
+        check_shape=True, profile_ids=profile_ids,
     )
+    if record_profiles is not None:
+        record_profiles(None, champion_drift_eval["profiles"])
 
     def gate_fn(ckpt_path: pathlib.Path) -> dict:
         from etchpipe.eval.eval import load_model_a
@@ -217,8 +248,11 @@ def make_gate_fn(state: DriftState, champion_ckpt: pathlib.Path = CHAMPION_CKPT)
         gate_cfg = yaml.safe_load(GATE_CFG_PATH.read_text())["gate"]
 
         cand = _eval_recipes(
-            model, ckpt_norm, state.eval_ids(), state.graphs_root, state.raw_dir, check_shape=True
+            model, ckpt_norm, state.eval_ids(), state.graphs_root, state.raw_dir, check_shape=True,
+            profile_ids=profile_ids,
         )
+        if record_profiles is not None:
+            record_profiles(ckpt_path, cand["profiles"])
         gate_a_ok, gate_a_detail = check_recipe_pass_rate(
             cand["depth_pred"], cand["depth_true"], cand["cd_pred"], cand["cd_true"],
             cand["rollout_errors"],
@@ -228,6 +262,12 @@ def make_gate_fn(state: DriftState, champion_ckpt: pathlib.Path = CHAMPION_CKPT)
             pass_rate=gate_cfg["recipe_pass_rate"],
         )
         physics_ok = cand["self_x_total"] == 0
+        if record_gate_progress is not None:
+            record_gate_progress({
+                "gate_a": {"passed": gate_a_ok, **gate_a_detail},
+                "physics": {"passed": physics_ok, "self_intersections": cand["self_x_total"]},
+                "gate_c": "pending" if gate_a_ok and physics_ok else "skipped",
+            })
 
         gate_c_ok, gate_c_detail = True, {}
         if gate_a_ok and physics_ok:

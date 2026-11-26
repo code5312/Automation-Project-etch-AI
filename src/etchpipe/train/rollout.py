@@ -24,6 +24,7 @@ node 채널 레이아웃은 `etl.to_graph` 그대로: pos[0:2], normal[2:4], mat
 theta[6:13], t[13:14] (2+2+2+7+1=14).
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -197,6 +198,7 @@ def rollout_val_error_by_step(
     loop_removal: bool = False,
     check_shape: bool = False,
     xr: tuple[float, float] = (-15.0, 15.0),
+    record_final_profile: Callable[[np.ndarray, np.ndarray | None], None] | None = None,
 ) -> dict[int, dict[str, float]]:
     """`g000.npz`(t=0)에서 `max(steps)`까지 롤아웃하고, `steps`의 각 스텝에서 실제
     `g<step>.npz`와 비교(W5-01, 설계서 C4 "스텝 5·10·20 보고") — 최종 스텝만 보면
@@ -262,6 +264,9 @@ def rollout_val_error_by_step(
             # 오차로 나와 방향은 맞음).
             pred_curve = pred_s
             diverged = True
+
+        if s == max_step and record_final_profile is not None:
+            record_final_profile(true_curve, None if diverged else pred_curve)
 
         entry = {
             "chamfer": chamfer_distance(pred_curve, true_curve),

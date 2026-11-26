@@ -49,15 +49,22 @@ XR = (-15.0, 15.0)
 # ::run()`이 실제로 쓰는 경로 규칙(`runs/retrain/<model_id>/model.pt`)으로 찾는다
 # [확인, 2026-11-13 — W6-05/06 실행으로 champion이 `mgn_retrain_20261112T212130`로
 # 바뀐 뒤 이 매핑에 없어서 `/predict`가 503을 내던 걸 발견·수정].
-_ARTIFACT_PATHS = {"mgn_tuned_ep2": REPO_ROOT / "runs" / "mgn_tuned" / "model.pt"}
-_RETRAIN_RUNS_ROOT = REPO_ROOT / "runs" / "retrain"
+_RUNS_ROOT = REPO_ROOT / "runs"
+_ARTIFACT_PATHS = {"mgn_tuned_ep2": _RUNS_ROOT / "mgn_tuned" / "model.pt"}
+_RETRAIN_RUNS_ROOT = _RUNS_ROOT / "retrain"
+
+
+def artifact_path_for(model_id: str, runs_root: pathlib.Path | None = None) -> pathlib.Path:
+    legacy = _ARTIFACT_PATHS.get(model_id)
+    if legacy is not None:
+        return legacy if runs_root is None else runs_root / legacy.relative_to(_RUNS_ROOT)
+    retrain_root = _RETRAIN_RUNS_ROOT if runs_root is None else runs_root / "retrain"
+    return retrain_root / model_id / "model.pt"
 
 
 def _artifact_path_for(model_id: str) -> pathlib.Path | None:
-    if model_id in _ARTIFACT_PATHS:
-        return _ARTIFACT_PATHS[model_id]
-    candidate = _RETRAIN_RUNS_ROOT / model_id / "model.pt"
-    return candidate if candidate.exists() else None
+    candidate = artifact_path_for(model_id)
+    return candidate if model_id in _ARTIFACT_PATHS or candidate.exists() else None
 
 
 class ChampionUnavailable(RuntimeError):
