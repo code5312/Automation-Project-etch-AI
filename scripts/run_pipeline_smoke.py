@@ -78,8 +78,8 @@ def main() -> int:
         "model_id": "dummy-smoke-v1",
         "card": {"valid_range": {}, "gate_result": {"passed": True, "exit_code": 0, "reasons": []}},
     }
-    serve_app.predict_recipe = lambda theta_dict, times: {
-        "model_version": "dummy-smoke-v1",
+    serve_app.predict_recipe = lambda theta_dict, times, *, champion: {
+        "model_version": champion["model_id"],
         "profiles": [{"t": t, "points": [[0.0, 0.0]]} for t in times],
         "cd": 0.0, "depth": 0.0, "taper_deg": 0.0, "in_range": True, "clamped": False,
     }
